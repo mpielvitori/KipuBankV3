@@ -32,16 +32,16 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     /* ===========================================
      *                  Constants
      * =========================================== */
-    
+
     /// @notice Version of the KipuBank contract
     string public constant VERSION = "3.1.0";
-    
+
     /// @notice Role for administrators who can manage the bank
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    
+
     /// @notice Role for operators who can perform restricted operations
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-    
+
     /// @notice Standard number of decimals for internal USD accounting (6 decimals like USDC)
     uint8 public constant USD_DECIMALS = 6;
 
@@ -54,27 +54,27 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Uniswap V2 Router for token swaps
     IUniswapV2Router02 private uniswapRouter;
-    
+
     /// @notice Uniswap V2 Factory for direct pair validation (cached and updateable by operator)
     IUniswapV2Factory private uniswapFactory;
 
     /// @notice Total number of deposit operations performed
     uint256 private depositsCount;
-    
+
     /// @notice Total number of withdrawal operations performed
     uint256 private withdrawalsCount;
-    
+
     /// @notice Maximum amount that can be withdrawn in a single transaction (in USD with 6 decimals)
     uint256 private immutable WITHDRAWAL_LIMIT_USD;
-    
+
     /// @notice Total limit of value that can be deposited in the bank (in USD with 6 decimals)
     uint256 private immutable BANK_CAP_USD;
-    
+
     /// @notice Mapping of user addresses to token addresses to their balances (in USD with 6 decimals)
-    /// @dev All balances are stored as USDC amounts after conversion. The mapping is kept bidimensional 
+    /// @dev All balances are stored as USDC amounts after conversion. The mapping is kept bidimensional
     ///      for future extensibility, but currently only USDC address will have non-zero values
     mapping(address => mapping(address => uint256)) public balances;
-    
+
     /// @notice Mapping to track total deposits per token (in USD with 6 decimals)
     /// @dev All deposits are converted to USDC, so only USDC address will have non-zero values
     ///      Extension-friendly structure for future multi-token support
@@ -89,22 +89,26 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     /// @param tokenSymbol Symbol of the original token deposited ("ETH" for native ETH, token symbol for ERC20)
     /// @param originalAmount Original amount deposited in the token's native decimals
     /// @param usdValue USDC amount received after swap (with 6 decimals), stored under USDC address in balances mapping
-    event Deposit(address indexed account, address indexed token, string tokenSymbol, uint256 originalAmount, uint256 usdValue);
-    
+    event Deposit(
+        address indexed account, address indexed token, string tokenSymbol, uint256 originalAmount, uint256 usdValue
+    );
+
     /// @notice Emitted when a user makes a withdrawal
     /// @param account Address of the user making the withdrawal
     /// @param token Address of the USDC token (withdrawals are always in USDC)
     /// @param tokenSymbol Always "USDC" since all withdrawals are in USDC
     /// @param originalAmount USDC amount withdrawn (with 6 decimals)
     /// @param usdValue Same as originalAmount (USDC amount with 6 decimals)
-    event Withdraw(address indexed account, address indexed token, string tokenSymbol, uint256 originalAmount, uint256 usdValue);
-    
+    event Withdraw(
+        address indexed account, address indexed token, string tokenSymbol, uint256 originalAmount, uint256 usdValue
+    );
+
     /// @notice Emitted when the Uniswap V2 Router address is updated by operator
     event UniswapRouterUpdated(address indexed operator, address oldRouter, address newRouter);
-    
+
     /// @notice Emitted when the Uniswap V2 Factory address is updated by operator
     event UniswapFactoryUpdated(address indexed operator, address oldFactory, address newFactory);
-    
+
     /// @notice Emitted when a role is granted to a user
     event RoleGrantedByAdmin(address indexed admin, address indexed account, bytes32 indexed role);
 
@@ -115,29 +119,29 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     /// @param attemptedUsd USD value attempted to deposit
     /// @param availableUsd Available USD capacity in the bank
     error ExceedsBankCapUSD(uint256 attemptedUsd, uint256 availableUsd);
-    
+
     /// @notice Error thrown when a withdrawal exceeds the per-transaction limit
     /// @param attemptedUsd USD value attempted to withdraw
     /// @param limitUsd Maximum withdrawal limit in USD
     error ExceedsWithdrawLimitUSD(uint256 attemptedUsd, uint256 limitUsd);
-    
+
     /// @notice Error thrown when a user tries to withdraw more than their balance
     /// @param availableUsd User's available balance in USD
     /// @param requiredUsd Amount requested for withdrawal in USD
     error InsufficientBalanceUSD(uint256 availableUsd, uint256 requiredUsd);
-    
+
     /// @notice Error thrown when an ETH transfer fails
     error TransferFailed();
-    
+
     /// @notice Error thrown when the withdrawal limit in constructor is invalid
     error InvalidWithdrawLimit();
-    
+
     /// @notice Error thrown when the bank capacity in constructor is invalid
     error InvalidBankCap();
 
     /// @notice Error thrown when the provided contract address is invalid
     error InvalidContract();
-    
+
     /// @notice Error thrown when trying to deposit 0 amount
     error ZeroAmount();
 
@@ -154,36 +158,29 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * @param _usdcToken Address of the USDC token contract.
      * @param _uniswapRouter Address of the Uniswap V2 Router contract.
      */
-    constructor(
-        uint256 _withdrawalLimitUsd, 
-        uint256 _bankCapUsd, 
-        address _usdcToken,
-        address _uniswapRouter
-    ) {
+    constructor(uint256 _withdrawalLimitUsd, uint256 _bankCapUsd, address _usdcToken, address _uniswapRouter) {
         if (_withdrawalLimitUsd == 0) {
             revert InvalidWithdrawLimit();
         }
         if (_bankCapUsd == 0) {
             revert InvalidBankCap();
         }
-        if(_usdcToken == address(0)) {
+        if (_usdcToken == address(0)) {
             revert InvalidContract();
         }
-        if(_uniswapRouter == address(0)) {
+        if (_uniswapRouter == address(0)) {
             revert InvalidContract();
         }
-        
+
         WITHDRAWAL_LIMIT_USD = _withdrawalLimitUsd;
         BANK_CAP_USD = _bankCapUsd;
         USDC_TOKEN = IERC20(_usdcToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
         uniswapFactory = IUniswapV2Factory(uniswapRouter.factory());
-        
+
         _grantRole(ADMIN_ROLE, msg.sender);
         _grantRole(OPERATOR_ROLE, msg.sender);
     }
-
-
 
     /**
      * @dev Allows users to deposit native ETH, which is automatically swapped to USDC via Uniswap V2.
@@ -195,10 +192,10 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         if (msg.value == 0) {
             revert ZeroAmount();
         }
-        
+
         // Use _depositTokenAsUsd with WETH address to reuse existing logic
         uint256 usdcAmount = _depositTokenAsUsd(msg.sender, msg.value, uniswapRouter.WETH());
-        
+
         // Emit event with ETH information (not WETH)
         emit Deposit(msg.sender, address(0), "ETH", msg.value, usdcAmount);
     }
@@ -216,18 +213,18 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         if (amountIn == 0) {
             revert ZeroAmount();
         }
-        
+
         // Prevent WETH deposits via this function - users should use deposit() for ETH
         if (tokenIn == uniswapRouter.WETH()) {
             revert UseDepositForETH();
         }
-        
+
         // Transfer token from user to contract
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-        
+
         // Call internal function to handle the deposit logic
         uint256 usdcAmount = _depositTokenAsUsd(msg.sender, amountIn, tokenIn);
-        
+
         // Emit event with token symbol
         emit Deposit(msg.sender, tokenIn, IERC20Metadata(tokenIn).symbol(), amountIn, usdcAmount);
     }
@@ -260,16 +257,14 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         if (currentTotalUsd + usdcAmount > BANK_CAP_USD) {
             revert ExceedsBankCapUSD(usdcAmount, BANK_CAP_USD - currentTotalUsd);
         }
-        
+
         // Effects - USDC already has 6 decimals, store directly
         balances[account][address(USDC_TOKEN)] += usdcAmount;
         totalTokenDeposits[address(USDC_TOKEN)] += usdcAmount;
         ++depositsCount;
-        
+
         return usdcAmount;
     }
-
-
 
     /**
      * @dev Allows users to withdraw USDC from their personal vault.
@@ -281,28 +276,26 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         if (amount == 0) {
             revert ZeroAmount();
         }
-        
+
         // Checks - use immutable limit
         if (amount > WITHDRAWAL_LIMIT_USD) {
             revert ExceedsWithdrawLimitUSD(amount, WITHDRAWAL_LIMIT_USD);
         }
-        
+
         uint256 userBalanceUsd = balances[msg.sender][address(USDC_TOKEN)];
         if (userBalanceUsd < amount) {
             revert InsufficientBalanceUSD(userBalanceUsd, amount);
         }
-        
+
         // Effects
         balances[msg.sender][address(USDC_TOKEN)] -= amount;
         totalTokenDeposits[address(USDC_TOKEN)] -= amount;
         ++withdrawalsCount;
         emit Withdraw(msg.sender, address(USDC_TOKEN), "USDC", amount, amount);
-        
+
         // Interactions - safe ERC20 transfer
         USDC_TOKEN.safeTransfer(msg.sender, amount);
     }
-
-
 
     /**
      * @dev Swaps a given token for USDC using Uniswap V2 with direct pairs only.
@@ -321,13 +314,9 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             path[1] = address(USDC_TOKEN);
 
             // Swap ETH -> USDC
-            uint256[] memory amounts = uniswapRouter.swapExactETHForTokens{value: amountIn}(
-                0,
-                path,
-                address(this),
-                block.timestamp
-            );
-            
+            uint256[] memory amounts =
+                uniswapRouter.swapExactETHForTokens{value: amountIn}(0, path, address(this), block.timestamp);
+
             return amounts[amounts.length - 1];
         } else {
             // Handle regular ERC20 token case
@@ -342,14 +331,9 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             path[1] = address(USDC_TOKEN);
 
             // Swap directo tokenIn -> USDC
-            uint256[] memory amounts = uniswapRouter.swapExactTokensForTokens(
-                amountIn,
-                0,
-                path,
-                address(this),
-                block.timestamp
-            );
-            
+            uint256[] memory amounts =
+                uniswapRouter.swapExactTokensForTokens(amountIn, 0, path, address(this), block.timestamp);
+
             return amounts[amounts.length - 1];
         }
     }
@@ -468,7 +452,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         return balances[account][address(USDC_TOKEN)];
     }
 
-
     /* ===========================================
      *        Admin functions (ADMIN_ROLE)
      * =========================================== */
@@ -499,7 +482,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         if (account == address(0)) {
             revert InvalidContract();
         }
-        
+
         _grantRole(OPERATOR_ROLE, account);
         emit RoleGrantedByAdmin(msg.sender, account, OPERATOR_ROLE);
     }
@@ -507,7 +490,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     /* ===========================================
      *     Operator functions (OPERATOR_ROLE)
      * =========================================== */
-
 
     /**
      * @dev Update the Uniswap V2 Router address and sync factory automatically.
@@ -521,7 +503,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
         address oldRouter = address(uniswapRouter);
         address oldFactory = address(uniswapFactory);
-        
+
         uniswapRouter = IUniswapV2Router02(newRouter);
         // Automatically sync factory with new router
         uniswapFactory = IUniswapV2Factory(IUniswapV2Router02(newRouter).factory());
@@ -545,7 +527,4 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
         emit UniswapFactoryUpdated(msg.sender, oldFactory, newFactory);
     }
-
-
-
 }
