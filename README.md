@@ -3,6 +3,7 @@
 ![Solidity](https://img.shields.io/badge/Solidity-^0.8.22-blue)
 ![Foundry](https://img.shields.io/badge/Foundry-v0.2.0-red)
 ![License](https://img.shields.io/badge/License-MIT-green)
+![Sepolia](https://img.shields.io/badge/Sepolia-Live-success)
 
 ## 📋 Overview
 
@@ -15,6 +16,13 @@ KipuBank is a smart decentralized bank that accepts deposits in ETH and multiple
 - **Gas Optimization**: 43% less gas on failed validations vs previous versions
 - **Access Control**: Admin/Operator roles with real-time updateable limits
 - **Advanced Security**: Reentrancy protection and comprehensive validations
+
+## 🌐 Live Deployments
+
+### Sepolia Testnet
+- **Contract Address**: [`0xf2e71cFFB88F31b92A13B245528D350A54F15feB`](https://sepolia.etherscan.io/address/0xf2e71cffb88f31b92a13b245528d350a54f15feb)
+- **Network**: Ethereum Sepolia Testnet
+- **Version**: KipuBank V3.3.0
 
 ## 🚀 Foundry Quick Start
 
@@ -120,6 +128,19 @@ cast wallet import wallet0 --interactive
 
 # Deploy to local network
 forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
+```
+
+### Deploy and verify on Sepolia
+
+⚠️ **Important**: Before running the deployment script, update the environment variables in `script/KipuBank.s.sol` based on your target network:
+- **For Mainnet/Mainnet fork**: Use `UNISWAP_V2_ROUTER_MAINNET` and `USDC_MAINNET`
+- **For Sepolia**: Change to `UNISWAP_V2_ROUTER_SEPOLIA` and `USDC_SEPOLIA`
+- *This will be improved with automatic network detection in future versions*
+
+```bash
+# Exports .env variables
+source .env
+forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $SEPOLIA_ETH_RPC_URL --broadcast --account walletSepolia --sender $SEPOLIA_WALLET_ADDRESS --verify --etherscan-api-key $ETHERSCAN_PRIVATE_KEY
 ```
 
 ### Main Functions by Role

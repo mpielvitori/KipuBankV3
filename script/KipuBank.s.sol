@@ -14,7 +14,12 @@ contract KipuBankScript is Script {
     function setUp() public {}
 
     function run() public {
-        // Read environment variables for Mainnet
+        // IMPORTANT: Update environment variables based on target network
+        // For Mainnet: Use UNISWAP_V2_ROUTER_MAINNET and USDC_MAINNET
+        // For Sepolia: Use UNISWAP_V2_ROUTER_SEPOLIA and USDC_SEPOLIA
+        // TODO: Improve this in future versions with network detection
+
+        // Read environment variables
         address uniswapV2Router = vm.parseAddress(vm.envString("UNISWAP_V2_ROUTER_MAINNET"));
         address usdcAddress = vm.parseAddress(vm.envString("USDC_MAINNET"));
         uint256 bankCapUsd = vm.envUint("BANK_CAP_USD");
