@@ -96,7 +96,7 @@ contract KipuBankTest is Test {
         assertEq(kipuBank.getUniswapRouter(), uniswapRouter);
 
         // Verify initial state
-        assertEq(kipuBank.VERSION(), "3.2.0");
+        assertEq(kipuBank.VERSION(), "3.3.0");
         assertFalse(kipuBank.paused(), "Should start unpaused");
         assertTrue(kipuBank.hasRole(kipuBank.ADMIN_ROLE(), admin));
         assertTrue(kipuBank.hasRole(kipuBank.OPERATOR_ROLE(), admin));
@@ -356,6 +356,66 @@ contract KipuBankTest is Test {
         vm.startPrank(operator);
         vm.expectRevert(KipuBank.InvalidContract.selector);
         kipuBank.updateUniswapRouter(address(0));
+        vm.stopPrank();
+    }
+
+    function testUpdateWithdrawalLimit() public {
+        uint256 newLimit = 2000 * 10 ** 6; // 2,000 USDC
+
+        vm.startPrank(operator);
+        kipuBank.updateWithdrawalLimit(newLimit);
+        vm.stopPrank();
+
+        assertEq(kipuBank.getWithdrawalLimitUSD(), newLimit);
+    }
+
+    function testUpdateWithdrawalLimitOnlyOperator() public {
+        uint256 newLimit = 2000 * 10 ** 6;
+
+        vm.startPrank(user1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user1, kipuBank.OPERATOR_ROLE()
+            )
+        );
+        kipuBank.updateWithdrawalLimit(newLimit);
+        vm.stopPrank();
+    }
+
+    function testUpdateWithdrawalLimitZeroValue() public {
+        vm.startPrank(operator);
+        vm.expectRevert(KipuBank.InvalidWithdrawLimit.selector);
+        kipuBank.updateWithdrawalLimit(0);
+        vm.stopPrank();
+    }
+
+    function testUpdateBankCap() public {
+        uint256 newCap = 10000 * 10 ** 6; // 10,000 USDC
+
+        vm.startPrank(operator);
+        kipuBank.updateBankCap(newCap);
+        vm.stopPrank();
+
+        assertEq(kipuBank.getBankCapUSD(), newCap);
+    }
+
+    function testUpdateBankCapOnlyOperator() public {
+        uint256 newCap = 10000 * 10 ** 6;
+
+        vm.startPrank(user1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user1, kipuBank.OPERATOR_ROLE()
+            )
+        );
+        kipuBank.updateBankCap(newCap);
+        vm.stopPrank();
+    }
+
+    function testUpdateBankCapZeroValue() public {
+        vm.startPrank(operator);
+        vm.expectRevert(KipuBank.InvalidBankCap.selector);
+        kipuBank.updateBankCap(0);
         vm.stopPrank();
     }
 

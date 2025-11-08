@@ -1,581 +1,205 @@
-# 🧪 **KipuBank Test Cases - Uniswap V2 Integration**
-
-## 🏗️ **Technical Implementation Details**
-
-### **Token Validation Logic**
-KipuBank uses gas-optimized validation with fail-fast architecture:
-
-```solidity
-// getAmountsOut() serves dual purpose: validates pair existence AND estimates output
-function _getExpectedUsdcAmount(uint256 amountIn, address tokenIn) private view returns (uint256) {
-    address[] memory path = new address[](2);
-    path[0] = tokenIn;
-    path[1] = address(USDC_TOKEN);
-    
-    try uniswapRouter.getAmountsOut(amountIn, path) returns (uint256[] memory amounts) {
-        return amounts[amounts.length - 1];
-    } catch {
-        revert NoDirectPairExists(); // No pair exists or insufficient liquidity
-    }
-}
-```
-
-**Validation Strategy**: 
-1. **Single call** validates pair + estimates USDC output
-2. **Bank cap checked BEFORE** expensive swap operations  
-3. **Fail-fast** approach saves substantial gas on invalid transactions
-
-### **Supported Token Types**
-| Token Type | Function | Swap Route | Gas Cost | Notes |
-|------------|----------|------------|----------|-------|
-| ETH | `deposit()` | ETH → WETH → USDC | ~128K | Router handles conversion |
-| WETH | `deposit()` | WETH → USDC | ~128K | Direct swap via deposit() |
-| USDC | `depositTokenAsUSD()` | No swap | ~30K | Direct transfer |
-| ERC20 w/ USDC pair | `depositTokenAsUSD()` | Token → USDC | ~84K | Pre-validated with getAmountsOut() |
-| ERC20 w/o USDC pair | `depositTokenAsUSD()` | ❌ Rejected | ~32K | `NoDirectPairExists` (43% less gas!) |
-
-### **Error Types & Gas Costs**  
-| Error | Gas Cost | When Triggered | Improvement |
-|-------|----------|----------------|-------------|
-| `NoDirectPairExists` | ~32K | Token lacks direct USDC pair | **43% less gas** |
-| `ExceedsBankCapUSD` | ~35K | Deposit exceeds bank capacity | **53% less gas (fail-fast)** |
-| `ExceedsWithdrawLimitUSD` | ~23K | Withdrawal exceeds limit | No change |
-| `UseDepositForETH` | ~22K | WETH used in wrong function | No change |
-
-## 📊 **Important Notes**
-
-### **Balance Functions**
-- `getBankValueUSD()`: Internal accounting (sum of tracked deposits)  
-- `getBankUSDCBalance()`: Actual USDC tokens held by contract
-- **Normal condition**: Both should return same value
-- **Discrepancies**: May indicate direct transfers, swap residue, or issues
-
-### **Gas Optimization Strategy**
-- **getAmountsOut() Integration**: Single call validates pair + estimates output (~8K gas)
-- **Fail-Fast Bank Cap**: Validation BEFORE expensive swaps (saves ~40K gas on cap errors)  
-- **Early Exit Design**: Invalid transactions fail quickly with minimal gas waste
-- **Break-even Analysis**: Immediate benefits for all error scenarios
-
-### **New Architecture Benefits**  
-- **43% less gas** for tokens without USDC pairs
-- **53% less gas** for deposits exceeding bank cap
-- **Code simplification**: Eliminated separate factory validation
-- **Better UX**: Faster error feedback, less wasted gas
-
-**Detailed Analysis**: See `GAS_ANALYSIS.md` for complete benchmarking results.
-
-## �🔍 **Case 1: Verify Initial Configuration**
-
-### **Actions to execute:**
-```
-// 1. Verify bank limits
-getBankCapUSD() 
-// Expected result: 5000000000 (5,000 USD with 6 decimals)
-
-getWithdrawalLimitUSD()
-// Expected result: 1000000000 (1,000 USD with 6 decimals)
-
-// 2. Verify Uniswap integration
-getUniswapRouter()
-// Expected result: 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D (Uniswap V2 Router)
-
-getUSDCAddress()
-// Expected result: USDC_TOKEN_ADDRESS
-
-// 3. Verify initial state (both functions should match)
-getBankValueUSD()
-// Expected result: 0 (internal accounting)
-
-getBankUSDCBalance()
-// Expected result: 0 (actual USDC tokens)
-
-paused()
-// Expected result: false
-```
-
-## 🔍 **Case 2: ETH Deposit (Successful)**
-
-### **Action:**
-```
-// Deposit 0.1 ETH (automatically swapped to USDC via Uniswap)
-deposit()
-// Value: 100000000000000000 (0.1 ETH in wei)
-```
-
-### **Expected results:**
-```
-getUserBalance(YOUR_ADDRESS)
-// Expected result: Variable amount in USDC (depends on ETH/USDC market rate)
-
-getBankValueUSD()
-// Expected result: Same as user balance
-
-getDepositsCount()
-// Expected result: 1
-
-getBankUSDCBalance()
-// Expected result: Same as user balance (actual USDC tokens held)
-```
-
-### **Expected event:**
-`Deposit(your_address, 0x000...000, "ETH", 100000000000000000, USDC_AMOUNT_RECEIVED)`
-
-**Note:** USDC amount depends on current ETH/USDC market rate on Uniswap
-
-## 🔍 **Case 3: ERC20 Token Deposit (USDC - No Swap)**
-
-### **Preparation:**
-```
-// 1. First, approve USDC for KipuBank contract
-// In USDC contract:
-approve(KIPUBANK_ADDRESS, 1000000000)
-// 1000000000 = 1,000 USDC (6 decimals)
-```
-
-### **Action:**
-```
-// 2. Deposit 1,000 USDC (no swap needed, already USDC)
-depositTokenAsUSD(1000000000, USDC_ADDRESS)
-```
-
-### **Expected results:**
-```
-getUserBalance(YOUR_ADDRESS)
-// Expected result: Previous balance + 1000000000
+# KipuBank Use Cases and Testing Guide
 
-getBankValueUSD()
-// Expected result: Previous total + 1000000000
+This document provides practical examples for testing KipuBank V3.3.0 using cast commands and Foundry scripts.
 
-getDepositsCount()
-// Expected result: 2
+## Environment Setup
 
-getBankUSDCBalance()
-// Expected result: Previous balance + 1000000000
-```
-
-### **Expected events:**
-`Transfer(your_address, KIPUBANK_ADDRESS, 1000000000)`
-`Deposit(your_address, USDC_ADDRESS, "USDC", 1000000000, 1000000000)`
-
-## 🔍 **Case 4: ERC20 Token Deposit with Swap (e.g., DAI)**
-
-### **Preparation:**
-```
-// 1. First, approve DAI (or other ERC20) for KipuBank contract
-// In DAI contract:
-approve(KIPUBANK_ADDRESS, 1000000000000000000000)
-// 1000000000000000000000 = 1,000 DAI (18 decimals)
-```
-
-### **Action:**
-```
-// 2. Deposit 1,000 DAI (will be swapped to USDC via Uniswap)
-depositTokenAsUSD(1000000000000000000000, DAI_ADDRESS)
-```
-
-### **Expected results:**
-```
-getUserBalance(YOUR_ADDRESS)
-// Expected result: Previous balance + USDC_AMOUNT_FROM_SWAP
-
-getBankValueUSD()
-// Expected result: Previous total + USDC_AMOUNT_FROM_SWAP
-
-getDepositsCount()
-// Expected result: 3
-
-getBankUSDCBalance()
-// Expected result: Previous balance + USDC_AMOUNT_FROM_SWAP
-```
-
-### **Expected events:**
-`Transfer(your_address, KIPUBANK_ADDRESS, 1000000000000000000000)`
-`Deposit(your_address, DAI_ADDRESS, "DAI", 1000000000000000000000, USDC_AMOUNT_FROM_SWAP)`
-
-**Note:** USDC amount depends on current DAI/USDC market rate on Uniswap
-
-## 🔍 **Case 5: USDC Withdrawal (Successful)**
-
-### **Action:**
-```
-// Withdraw 500 USDC (all withdrawals are in USDC)
-withdrawUSD(500000000)
-// 500000000 = 500 USDC (6 decimals)
-```
-
-### **Expected results:**
-```
-getUserBalance(YOUR_ADDRESS)
-// Expected result: Previous balance - 500000000
-
-getWithdrawalsCount()
-// Expected result: 1
-
-getBankValueUSD()
-// Expected result: Previous total - 500000000
-
-getBankUSDCBalance()
-// Expected result: Previous balance - 500000000
-```
-
-### **Expected events:**
-`Withdraw(your_address, USDC_ADDRESS, "USDC", 500000000, 500000000)`
-`Transfer(KIPUBANK_ADDRESS, your_address, 500000000)`
-
----
-
-## 🚫 **Case 6: WETH Deposit Rejection**
-
-### **Action:**
-```
-// Attempt to deposit WETH via depositTokenAsUSD (should fail)
-// 1. First approve WETH
-approve(KIPUBANK_ADDRESS, 1000000000000000000) // 1 WETH
-
-// 2. Try to deposit WETH
-depositTokenAsUSD(1000000000000000000, WETH_ADDRESS)
-```
+Configure your environment variables in `.env` file and load them:
 
-### **Expected result:**
+```bash
+# Load environment variables
+source .env
 ```
-❌ Error: UseDepositForETH()
-```
-
-### **Note:**
-Users should use `deposit()` function for ETH deposits, not `depositTokenAsUSD()` with WETH address.
 
----
+### Verify Contract Deployment
+Before testing, ensure KipuBank is properly deployed:
 
-## 🚫 **Case 7: Attempt to Exceed Withdrawal Limit**
+```bash
+# Check if contract has code (should return bytecode, not empty)
+cast code $KIPUBANK_ADDRESS --rpc-url $RPC_URL
 
-### **Action:**
-```
-// Attempt to withdraw more than $1,000 USD limit
-withdrawUSD(1500000000)
-// 1500000000 = 1,500 USDC (exceeds 1,000 USD limit)
-```
-
-### **Expected result:**
-```
-❌ Error: ExceedsWithdrawLimitUSD
-
-{
- "attemptedUSD": {
-  "value": "1500000000",
-  "documentation": "USD value attempted to withdraw"
- },
- "limitUSD": {
-  "value": "1000000000",
-  "documentation": "Maximum withdrawal limit in USD"
- }
-}
+# Check basic contract info
+cast call $KIPUBANK_ADDRESS "VERSION()(string)" --rpc-url $RPC_URL
 ```
 
----
+**Required Environment Variables:**
+- `KIPUBANK_ADDRESS` - Your deployed KipuBank contract address
+- `RPC_URL` - Your Ethereum RPC URL
+- `USER_WALLET_ADDRESS` - User wallet address for testing
+- `OPERATOR_WALLET_ADDRESS` - Operator wallet address for role testing
+- `USDC_MAINNET` - USDC token address (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48)
+- `LINK_MAINNET` - LINK token address (0x3E64Cd889482443324F91bFA9c84fE72A511f48A) 
+- `WETH_MAINNET` - WETH token address (0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)
+- `UNISWAP_V2_ROUTER_MAINNET` - Uniswap V2 Router address (0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D)
+- Private keys for testing accounts
 
-## 🚫 **Case 8: Attempt to Exceed Bank Cap**
+<!-- Generate new test private keys if needed:
+```bash
+# Generate new test accounts
+cast wallet new # Creates new random wallet with private key
+cast wallet new-mnemonic # Creates mnemonic and derived accounts
+``` -->
 
-### **Preparation:**
-```
-// Calculate how much is left to reach $5,000 cap
-getBankValueUSD()
-// Suppose it returns current_balance
-// Remaining: 5000000000 - current_balance
-```
+## Basic Balance Checking
 
-### **Action:**
-```
-// Attempt to deposit more USDC than allowed
-// Try to deposit amount that would exceed cap
-depositTokenAsUSD(LARGE_AMOUNT, USDC_ADDRESS)
-```
+### Using Cast Commands
 
-### **Expected result:**
+Check user balance:
+```bash
+# Get raw balance (in USDC wei - 6 decimals)
+cast call $KIPUBANK_ADDRESS "getUserBalance(address)(uint256)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL
 ```
-❌ Error: ExceedsBankCapUSD
-{
- "attemptedUSD": {
-  "value": "LARGE_AMOUNT",
-  "documentation": "USD value attempted to deposit"
- },
- "availableUSD": {
-  "value": "REMAINING_CAPACITY",
-  "documentation": "Available USD capacity in the bank"
- }
-}
-```
-
----
 
-## 🔍 **Case 9: Admin Functions**
-
-### **Pause as NON-admin user:**
-```
-// As NON-admin user, pause the bank
-pauseBank()
-```
+Check bank statistics:
+```bash
+# Bank total value
+cast call $KIPUBANK_ADDRESS "getBankValueUSD()(uint256)" --rpc-url $RPC_URL
 
-### **Expected result:**
-```
-❌ Error: AccessControlUnauthorizedAccount
-{
- "account": {
-  "value": "your_address"
- },
- "neededRole": {
-  "value": "0xa49807205ce4d355092ef5a8a18f56e8913cf4a201fbe287825b095693c21775"
- }
-}
-```
+# USDC balance
+cast call $KIPUBANK_ADDRESS "getBankUSDCBalance()(uint256)" --rpc-url $RPC_URL
 
-### **Pause as admin user:**
-```
-// As admin, pause the bank
-pauseBank()
-```
+# Bank capacity
+cast call $KIPUBANK_ADDRESS "getBankCapUSD()(uint256)" --rpc-url $RPC_URL
 
-### **Verification:**
-```
-paused()
-// Expected result: true
-
-// Attempt to deposit with paused bank
-deposit()
-// Value: 10000000000000000 (0.01 ETH)
-// Expected result: ❌ Error: EnforcedPause()
+# Withdrawal limit
+cast call $KIPUBANK_ADDRESS "getWithdrawalLimitUSD()(uint256)" --rpc-url $RPC_URL
 ```
 
-### **Expected event:**
-`Paused(your_address)`
+## Getting Test Tokens First
 
-### **Unpause:**
-```
-unpauseBank()
+Before testing KipuBank functions, you need tokens. Since you have 10,000 ETH per test account, swap ETH for the tokens you need:
 
-paused()
-// Expected result: false
-```
+### Quick Token Acquisition
 
-### **Expected event:**
-`Unpaused(your_address)`
+```bash
+# Set deadline to 30 minutes from now (Unix timestamp)
+DEADLINE=$(($(date +%s) + 1800))  # 30 minutes from now
 
----
+# Get 2000+ USDC (swap 1 ETH)
+cast send $UNISWAP_V2_ROUTER_MAINNET "swapExactETHForTokens(uint256,address[],address,uint256)" 0 "[$WETH_MAINNET,$USDC_MAINNET]" $USER_WALLET_ADDRESS $DEADLINE --value 1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-## 🚫 **Case 10: Redundant Pause/Unpause Operations**
+# Get 50+ LINK tokens (swap 0.5 ETH)
+cast send $UNISWAP_V2_ROUTER_MAINNET "swapExactETHForTokens(uint256,address[],address,uint256)" 0 "[$WETH_MAINNET,$LINK_MAINNET]" $USER_WALLET_ADDRESS $DEADLINE --value 0.5ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **Attempt to pause already paused bank:**
+# Check your new token balances
+echo "USDC: $(($(cast call $USDC_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL) / 1000000)) USDC"
+echo "LINK: $(($(cast call $LINK_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL) / 1000000000000000000)) LINK"
 ```
-// First pause the bank
-pauseBank()
-
-// Try to pause again (should fail)
-pauseBank()
-```
 
-### **Expected result:**
-```
-❌ Error: EnforcedPause()
-```
+## KipuBank Function Testing
 
-### **Attempt to unpause already unpaused bank:**
-```
-// First unpause the bank (if paused)
-unpauseBank()
-
-// Try to unpause again (should fail)
-unpauseBank()
-```
+### User Functions
+```bash
+# 1. Deposit ETH directly (converts to USDC)
+cast send $KIPUBANK_ADDRESS "deposit()" --value 0.1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **Expected result:**
-```
-❌ Error: ExpectedPause()
-```
+# 2. Deposit USDC (1000 USDC = 1000000000 wei, 6 decimals)
+cast send $USDC_MAINNET "approve(address,uint256)" $KIPUBANK_ADDRESS 1000000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
+cast send $KIPUBANK_ADDRESS "depositTokenAsUSD(uint256,address)" 1000000000 $USDC_MAINNET --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
----
+# 3. Deposit LINK (10 LINK = 10000000000000000000 wei, 18 decimals)
+cast send $LINK_MAINNET "approve(address,uint256)" $KIPUBANK_ADDRESS 10000000000000000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
+cast send $KIPUBANK_ADDRESS "depositTokenAsUSD(uint256,address)" 10000000000000000000 $LINK_MAINNET --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-## 🔍 **Case 11: Operator Functions**
+# 4. Check your balance
+forge script script/UserHelper.s.sol --rpc-url $RPC_URL -s "checkUser(address)" $USER_WALLET_ADDRESS -vvv
 
-### **Grant operator role:**
-```
-// As admin, grant operator role to another account
-grantOperatorRole(OPERATOR_ADDRESS)
+# 5. Withdraw USD (50 USDC = 50000000 wei)
+cast send $KIPUBANK_ADDRESS "withdrawUSD(uint256)" 50000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-### **Verification:**
-```
-OPERATOR_ROLE -> 0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929
-hasRole(OPERATOR_ROLE, OPERATOR_ADDRESS)
-// Expected result: true
-```
+### Admin Functions (ADMIN_ROLE)
+```bash
+# Pause/unpause the bank
+cast send $KIPUBANK_ADDRESS "pauseBank()" --private-key $ADMIN_PRIVATE_KEY --rpc-url $RPC_URL
+cast send $KIPUBANK_ADDRESS "unpauseBank()" --private-key $ADMIN_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **Update Uniswap Router:**
-```
-// As operator, update the Uniswap Router
-updateUniswapRouter(NEW_ROUTER_ADDRESS)
-```
+# Grant operator role to an address (ADMIN_ROLE required)
+cast send $KIPUBANK_ADDRESS "grantOperatorRole(address)" $OPERATOR_WALLET_ADDRESS --private-key $ADMIN_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **Verification:**
+# Check if address has operator role (using OpenZeppelin AccessControl)
+cast call $KIPUBANK_ADDRESS "hasRole(bytes32,address)(bool)" 0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929 $OPERATOR_WALLET_ADDRESS --rpc-url $RPC_URL
 ```
-getUniswapRouter()
-// Expected result: NEW_ROUTER_ADDRESS
-```
-
-### **Expected event:**
-`UniswapRouterUpdated(your_address, OLD_ROUTER_ADDRESS, NEW_ROUTER_ADDRESS)`
 
-### **Expected events:**
-`RoleGranted(OPERATOR_ROLE, OPERATOR_ADDRESS, ADMIN_ADDRESS)`
-`RoleGrantedByAdmin(ADMIN_ADDRESS, OPERATOR_ADDRESS, OPERATOR_ROLE)`
+### Operator Functions (OPERATOR_ROLE)
+```bash
+# Note: First grant operator role using Admin Functions above
 
----
+# Update bank cap (2000 USD = 2000000000 wei)
+cast send $KIPUBANK_ADDRESS "updateBankCap(uint256)" 2000000000 --private-key $OPERATOR_PRIVATE_KEY --rpc-url $RPC_URL
 
-## 🔍 **Case 11: Operator Functions**
-
-### **Update Uniswap Router:**
-```
-// As operator, update the Uniswap Router
-updateUniswapRouter(NEW_ROUTER_ADDRESS)
+# Update withdrawal limit (100 USD = 100000000 wei)
+cast send $KIPUBANK_ADDRESS "updateWithdrawalLimit(uint256)" 100000000 --private-key $OPERATOR_PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-### **Verification:**
-```
-getUniswapRouter()
-// Expected result: NEW_ROUTER_ADDRESS
-```
+## Simple Testing Workflow
 
-### **Expected event:**
-`UniswapRouterUpdated(your_address, OLD_ROUTER_ADDRESS, NEW_ROUTER_ADDRESS)`
+```bash
+# 1. Get tokens first
+source .env
 
-### **Note on USDC Address:**
-```
-// The USDC token address is immutable and cannot be changed after deployment
-// This prevents manipulation of user balances once deposits exist
-getUSDCAddress()
-// This will always return the original USDC address set at deployment
-```
+DEADLINE=$(($(date +%s) + 1800))  # 30 minutes from now
 
----
+# Swap 1 ETH for USDC
+cast send $UNISWAP_V2_ROUTER_MAINNET "swapExactETHForTokens(uint256,address[],address,uint256)" 0 "[$WETH_MAINNET,$USDC_MAINNET]" $USER_WALLET_ADDRESS $DEADLINE --value 1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-## 📊 **Quick Reference**
+# 2. Deposit ETH directly
+cast send $KIPUBANK_ADDRESS "deposit()" --value 0.1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **ETH amounts in wei:**
-```
-10000000000000000    // 0.01 ETH
-50000000000000000    // 0.05 ETH  
-100000000000000000   // 0.1 ETH
-250000000000000000   // 0.25 ETH
-1000000000000000000  // 1 ETH
-```
+# 3. Deposit some USDC
+USDC_BALANCE=$(cast call $USDC_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL)
+DEPOSIT_AMOUNT=$((USDC_BALANCE / 2))
+cast send $USDC_MAINNET "approve(address,uint256)" $KIPUBANK_ADDRESS $DEPOSIT_AMOUNT --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
+cast send $KIPUBANK_ADDRESS "depositTokenAsUSD(uint256,address)" $DEPOSIT_AMOUNT $USDC_MAINNET --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **USDC amounts (6 decimals):**
-```
-1000000     // 1 USDC
-100000000   // 100 USDC
-500000000   // 500 USDC
-1000000000  // 1,000 USDC
-5000000000  // 5,000 USDC
-```
+# 4. Check your total balance
+forge script script/UserHelper.s.sol --rpc-url $RPC_URL -s "checkUser(address)" $USER_WALLET_ADDRESS -vvv
 
-### **DAI amounts (18 decimals):**
+# 5. Test withdrawal
+cast send $KIPUBANK_ADDRESS "withdrawUSD(uint256)" 25000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 ```
-1000000000000000000      // 1 DAI
-100000000000000000000    // 100 DAI
-1000000000000000000000   // 1,000 DAI
-```
 
-### **Special addresses:**
-```
-0x0000000000000000000000000000000000000000  // address(0) only for ETH in events (not used in balances)
-USDC_ADDRESS   // Your USDC token address (where all balances are stored)
-DAI_ADDRESS    // DAI token address (if testing token swaps)
-WETH_ADDRESS   // WETH token address (for rejection test)
-```
+## Error Testing Scenarios
 
-### **Key Differences from Previous Version:**
-- ✅ All deposits converted to USDC and stored as USDC
-- ✅ Only USDC withdrawals available (`withdrawUSD()`)
-- ✅ ETH deposits via `deposit()` (payable)
-- ✅ ERC20 deposits via `depositTokenAsUSD()` (requires approval)
-- ✅ WETH deposits rejected with `UseDepositForETH()` error
-- ✅ No price oracles - market rates via Uniswap
-- ✅ Direct USDC pairs required for token swaps
-
-### **Important Balance Storage Notes:**
-- ✅ All user balances stored under `balances[user][USDC_ADDRESS]` internally
-- ✅ `address(0)` only used in events to represent original ETH deposits
-- ✅ Bidimensional mapping kept for future extensibility
-- ✅ Use `getUserBalance(user)` to query user's USDC balance
-- ✅ Function `getUserBalanceUSD` removed (was redundant)
-
----
-
-## 🚫 **Case 12: Access Control for Operator Functions**
-
-### **Non-operator tries to update router:**
-```
-// As non-operator user, try to update router
-updateUniswapRouter(NEW_ROUTER_ADDRESS)
-```
+### Test Common Failures
+```bash
+# Try to withdraw more than limit (should fail)
+cast send $KIPUBANK_ADDRESS "withdrawUSD(uint256)" 2000000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 
-### **Expected result:**
-```
-❌ Error: AccessControlUnauthorizedAccount
-{
- "account": "USER_ADDRESS",
- "neededRole": "0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929"
-}
+# Try to deposit WETH (should fail - WETH not allowed)
+cast send $WETH_MAINNET "approve(address,uint256)" $KIPUBANK_ADDRESS 1000000000000000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
+cast send $KIPUBANK_ADDRESS "depositTokenAsUSD(uint256,address)" 1000000000000000000 $WETH_MAINNET --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
-### **Non-operator tries to update factory:**
-```
-// As non-operator user, try to update router
-updateUniswapRouter(NEW_ROUTER_ADDRESS)
-```
+## Quick Reference
 
-### **Expected result:**
-```
-❌ Error: AccessControlUnauthorizedAccount
-{
- "account": "USER_ADDRESS", 
- "neededRole": "0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929"
-}
-```
+### Check Balances
+```bash
+# User balance in KipuBank
+cast call $KIPUBANK_ADDRESS "getUserBalance(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL
 
-### **Zero address validation:**
-```
-// As operator, try to set zero address
-updateUniswapRouter(0x000...000)
-```
+# Token balances
+cast call $USDC_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL
+cast call $LINK_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL
 
-### **Expected result:**
+# Bank status
+cast call $KIPUBANK_ADDRESS "getBankValueUSD()" --rpc-url $RPC_URL
+cast call $KIPUBANK_ADDRESS "getBankCapUSD()" --rpc-url $RPC_URL
 ```
-❌ Error: InvalidContract()
-```
 
----
+### Using UserHelper Script
+```bash
+# Complete analysis
+forge script script/UserHelper.s.sol --rpc-url $RPC_URL -vvv
 
-## 📊 **Case 13: Gas Optimization Verification**
+# Check specific user
+forge script script/UserHelper.s.sol --rpc-url $RPC_URL -s "checkUser(address)" $USER_WALLET_ADDRESS -vvv
 
-### **Test pair validation gas costs:**
-```
-// Measure gas for successful getAmountsOut validation + estimation
-_getExpectedUsdcAmount(1000000000000000000, TOKEN_ADDRESS)
-// Expected gas: ~8,000 (router call with path validation)
-
-// Compare with old approach (getPair + swap)
-uniswapFactory.getPair(TOKEN_ADDRESS, USDC_ADDRESS) 
-_swapTokenForUsdc(amount, tokenAddress)
-// Expected gas: ~50,000+ (separate validation + full swap)
-
-// Savings per failed transaction: ~42,000 gas
+# Bank statistics
+forge script script/UserHelper.s.sol --rpc-url $RPC_URL -s "bankStats()" -vvv
 ```
 
-### **New Architecture Benefits:**
-```
-// No factory caching needed - validation through router
-// Immediate bank cap validation before expensive swaps
-// Single call validates pair existence AND estimates output
-// Break-even point: 22,000 ÷ 2,100 ≈ 10.5 failed transactions
-
-// After ~11 failed token validations, the cache pays for itself
-```
+### Token Decimals Reference
+- **USDC**: 6 decimals (1 USDC = 1,000,000 wei)
+- **LINK**: 18 decimals (1 LINK = 1,000,000,000,000,000,000 wei)  
+- **ETH**: 18 decimals (1 ETH = 1,000,000,000,000,000,000 wei)

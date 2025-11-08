@@ -1,331 +1,296 @@
-## Foundry
-
-### Installation
-
-```shell
-forge install OpenZeppelin/openzeppelin-contracts
-forge install Uniswap/v2-periphery
-forge install foundry-rs/forge-std
-```
-
-### Environment Setup
-
-1. Copy `.env.example` to `.env` and configure your settings:
-```shell
-cp .env.example .env
-```
-
-2. Edit `.env` and replace `YOUR_ALCHEMY_KEY_HERE` with your current Alchemy API key
-
-3. Load environment variables:
-```shell
-source .env
-```
-
-**Note**: For testing with forks, you need a valid `ETH_RPC_URL`. You can use:
-- Alchemy: `https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY`
-- Infura: `https://mainnet.infura.io/v3/YOUR_PROJECT_ID`
-- Public RPC: `https://eth.public-rpc.com` (slower but free)
-
-Map libraries
-```shell
-forge remappings > remappings.txt
-```
-
-### Build
-
-```shell
-forge build
-```
-
-### Testing
-
-#### Run Unit Tests (with Mainnet Fork)
-```shell
-forge test
-```
-
-#### Run Specific Test
-```shell
-forge test --match-test testETHDepositSuccess -vvv
-```
-
-#### Run Tests with Gas Report
-```shell
-forge test --gas-report
-```
-
-**Note**: Tests use Ethereum mainnet fork to interact with real Uniswap contracts. Make sure your `ETH_RPC_URL` is configured in `.env`.
-
-## Starting Anvil with Sepolia Fork
-```shell
-anvil --fork-url $ETH_RPC_URL
-```
-
-## Deploy KipuBank Contract
-```shell
-forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $WALLET_ADDRESS
-```
-
-
-# KipuBank - Smart Contract
+# KipuBank V3.3.0 - Multi-Token Decentralized Bank
 
 ![Solidity](https://img.shields.io/badge/Solidity-^0.8.22-blue)
+![Foundry](https://img.shields.io/badge/Foundry-v0.2.0-red)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 📋 Description
+## 📋 Overview
 
-KipuBank is a smart contract developed in Solidity that simulates a multi-token decentralized bank. It allows users to deposit ETH and any ERC20 tokens, automatically converting them to USDC for unified storage and accounting.
+KipuBank is a smart decentralized bank that accepts deposits in ETH and multiple ERC20 tokens, automatically converting everything to USDC for unified storage. It uses Uniswap V2 for real-time swaps and maintains simplified accounting.
 
-### Main Features
+### Key Features
 
-- **Multi-Token Support**: Accepts ETH and any ERC20 token with direct Uniswap V2 pairs to USDC
-- **Uniswap Integration**: Automatic token swaps using Uniswap V2 Router for real-time conversions
-- **Unified USDC Storage**: All deposits converted and stored as USDC for simplified accounting
-- **Access Control**: Role-based system (Admin/Operator) with OpenZeppelin AccessControl
+- **Multi-Token Support**: ETH and ERC20 tokens with direct USDC pairs on Uniswap V2
+- **Automatic Conversion**: All deposits converted and stored as USDC
+- **Gas Optimization**: 43% less gas on failed validations vs previous versions
+- **Access Control**: Admin/Operator roles with real-time updateable limits
 - **Advanced Security**: Reentrancy protection and comprehensive validations
-- **Configurable Limits**: Global capacity and USD withdrawal limits
-- **Events and Statistics**: Complete multi-token operation logging
 
-## 🏗️ Contract Architecture
+## 🚀 Foundry Quick Start
 
-### Key Variables
-- `WITHDRAWAL_LIMIT_USD` (immutable): Maximum USD per withdrawal
-- `BANK_CAP_USD` (immutable): Total bank capacity in USD
-- `balances`: User balances mapping (all stored as USDC amounts)
-- `uniswapRouter`: Uniswap V2 Router for token swaps
-- `USDC_TOKEN` (immutable): USDC contract address (set at deployment for security)
+### Installation & Setup
 
-### Main Functions
+```bash
+# Clone repository
+git clone https://github.com/mpielvitori/KipuBankV3.git
+cd KipuBankV3
 
-| Function | Visibility | Description |
-|----------|-----------|-------------|
-| `deposit()` | external payable | Deposit ETH (swapped to USDC via Uniswap) |
-| `depositTokenAsUSD(amount, token)` | external | Deposit any ERC20 token (swapped to USDC) |
-| `withdrawUSD(amount)` | external | Withdraw USDC directly |
-| `getUserBalance(user)` | external view | View user balance in USDC |
-| `getBankValueUSD()` | external view | View total USD value per internal accounting |
-| `getUniswapRouter()` | external view | View current Uniswap Router address |
-| `updateUniswapRouter(router)` | external (operator) | Update router address |
+# Install dependencies
+forge install
 
-### Implemented Security
-- ✅ **Reentrancy Protection**: OpenZeppelin ReentrancyGuard
-- ✅ **Access Control**: Admin/Operator role-based system
-- ✅ **CEI Pattern**: Checks-Effects-Interactions properly implemented
-- ✅ **Custom Errors**: Specific error types for each validation
-- ✅ **Safe Transfers**: Use of `.call()` for ETH and standard ERC20
-- ✅ **Oracle Validation**: Verification of valid price data
+# Configure environment
+cp .env.example .env
+# Edit .env with your ETH_RPC_URL (Alchemy/Infura)
+```
 
-## 🚀 Deployment on Remix IDE
+### Build & Testing
 
-# Resumen de Decisiones de Arquitectura
+```bash
+# Compile contracts
+forge build
 
-- Solo se permiten depósitos de tokens que tengan un par directo con USDC en Uniswap V2.
-- El contrato cachea la dirección de la factory (actualizable por operator) para optimizar gas (ahorro de ~2,100 gas por validación, costo de deployment +22,000 gas, break-even en 18 transacciones fallidas).
-- ETH y WETH son soportados como casos especiales (ETH → WETH → USDC lo maneja el router, WETH → USDC es swap directo).
-- No se permiten rutas multi-hop (ej: Token → WETH → USDC) para otros tokens, solo pares directos.
-- Los errores son claros y específicos (`NoDirectPairExists`).
-- La validación previa evita swaps fallidos costosos y mejora la experiencia de usuario.
-- Factory y router son actualizables por operators para flexibilidad futura.
+# Run all tests
+forge test
 
-## Ejemplo de validación
+# Tests with gas report
+forge test --gas-report
 
+# Specific test with detailed logs
+forge test --match-test testETHDepositSuccess -vvv
+
+# Test coverage
+forge coverage
+```
+
+### Local Deploy
+
+```bash
+# Exports .env variables
+source .env
+
+# Start local network with mainnet fork
+anvil --fork-url $ETH_RPC_URL
+
+# Using the data from anvil, import any wallet using its private key
+cast wallet import wallet0 --interactive
+
+# Deploy to local network
+forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
+```
+
+## 🏗️ Architecture
+
+### Key Variables (V3.3.0)
 ```solidity
-function _getExpectedUsdcAmount(uint256 amountIn, address tokenIn) private view returns (uint256) {
-    address[] memory path = new address[](2);
-    path[0] = tokenIn;
-    path[1] = address(USDC_TOKEN);
-    
-    try uniswapRouter.getAmountsOut(amountIn, path) returns (uint256[] memory amounts) {
-        return amounts[amounts.length - 1];
+// Updateable limits by OPERATOR_ROLE
+uint256 public withdrawalLimitUsd;
+uint256 public bankCapUsd;
+
+// Immutable configuration (security)
+address public immutable USDC_TOKEN;
+string public constant VERSION = "3.3.0";
+
+// Unified balance mapping
+mapping(address => uint256) public balances;  // Everything in USDC
+```
+
+### Main Functions by Role
+
+#### **User Functions (Public Access)**
+| Function | Gas Cost | Description |
+|----------|----------|-------------|
+| `deposit()` | ~130K | Deposit ETH (converted to USDC) |
+| `depositTokenAsUSD()` | ~85K | Deposit ERC20 (converted to USDC) |
+| `withdrawUSD()` | ~43K | Withdraw USDC |
+
+#### **Operator Functions (OPERATOR_ROLE)**
+| Function | Gas Cost | Description |
+|----------|----------|-------------|
+| `updateWithdrawalLimit()` | ~26K | Update withdrawal limit |
+| `updateBankCap()` | ~26K | Update bank capacity |
+| `updateUniswapRouter()` | ~26K | Update Uniswap router address |
+
+#### **Admin Functions (ADMIN_ROLE)**
+| Function | Gas Cost | Description |
+|----------|----------|-------------|
+| `pauseBank()` | ~24K | Pause all bank operations |
+| `unpauseBank()` | ~24K | Resume bank operations |
+| `grantOperatorRole()` | ~50K | Grant operator role to address |
+
+> **📋 For detailed examples and testing**: See [`USE_CASES.md`](USE_CASES.md) for complete Foundry testing workflows, `cast` command examples, and practical use cases for each function.
+
+## ⚖️ Design Trade-offs and Architecture Evolution
+
+### 🔄 Factory.getPair() vs getAmountsOut() Optimization
+
+#### **Previous Version (v3.1.0)**
+```solidity
+// Separate validation with factory caching
+function _hasDirectPairWithUSDC(address token) private view returns (bool) {
+    address pair = uniswapFactory.getPair(token, usdcAddress);
+    return pair != address(0);
+}
+// + separate getAmountsOut() call for estimation
+// = 2 calls, ~8,000 gas total
+```
+
+#### **Current Version (v3.3.0)**
+```solidity
+// Validation and estimation in single call
+function _getExpectedUsdcAmount(address token, uint256 amount) private view returns (uint256) {
+    try uniswapRouter.getAmountsOut(amount, path) returns (uint256[] memory amounts) {
+        return amounts[1];  // Dual-purpose validation + estimation
     } catch {
-        revert NoDirectPairExists(); // No pair exists or insufficient liquidity
+        revert("No liquidity available for token");  // 43% less gas!
     }
 }
 ```
 
-## Funciones de Operator
+**Trade-off Results:**
+- ✅ **43% less gas** on failed validations
+- ✅ **Simplification**: Completely eliminated `uniswapFactory` dependency  
+- ✅ **Fail-fast**: Bank cap validated BEFORE expensive swap
+- ✅ **6.1% less gas** on deployment (207K gas savings)
+- ❌ **Complexity**: 2-hop path for getAmountsOut vs simple getPair()
 
+### 🔒 Immutable vs Updateable Limits
+
+#### **Core Trade-off**
 ```solidity
-// Actualizar router solamente
-function updateUniswapRouter(address newRouter) external onlyRole(OPERATOR_ROLE);
-```## Tokens soportados
-- ETH (el router maneja el wrap a WETH)
-- WETH
-- USDC
-- Tokens con par directo USDC (ej: DAI, USDT, WBTC)
+// BEFORE (v3.2.0): Maximum security
+uint256 public immutable WITHDRAWAL_LIMIT_USD;
+uint256 public immutable BANK_CAP_USD;
 
-## Trade-offs
-- ✅ Simplicidad y predictibilidad
-- ✅ Gas eficiente con getAmountsOut (43% menos en errores)
-- ✅ Flexibilidad: Router actualizable por operator
-- ✅ Fail-fast validation: Bank cap check antes del swap
-- ❌ No soporta tokens que solo tengan par con WETH
-- ❌ Requiere rol operator para actualizaciones (seguridad vs flexibilidad)
+// AFTER (v3.3.0): Operational flexibility
+uint256 public withdrawalLimitUsd;
+uint256 public bankCapUsd;
+function updateWithdrawalLimit(uint256 newLimit) external onlyRole(OPERATOR_ROLE);
+```
 
-## Para más detalles, ver USE_CASES.md
-- ❌ Limited tokens: Only direct USDC pairs (by design)
-- ❌ No multi-hop: Token → WETH → USDC routes not supported
-- ✅ Router/Factory updates: Operators can update addresses for flexibility
+**Benefits:**
+- ✅ **Flexibility**: Adjust limits without redeployment
+- ✅ **Quick response**: Changes for market conditions
+- ✅ **Granular control**: Only OPERATOR_ROLE can update
 
-### **Token Routing Strategy**
+**Mitigated Risks:**
+- ✅ **Access control**: Only authorized operators
+- ✅ **Validations**: Zero values not allowed
+- ✅ **Events**: All changes fully auditable
+- ❌ **Trust**: Requires trusting protocol governance
 
-#### **Supported Token Types**
+### � Immutable USDC Token Address
+
+#### **Core Design Decision**
 ```solidity
-if (token == ETH) {
-    // Router handles ETH → WETH → USDC automatically
-} else if (token == WETH) {
-    // Direct WETH → USDC swap
-} else if (token == USDC) {
-    // No conversion needed
-} else {
-    // ONLY direct token → USDC pairs allowed
-    if (!_hasDirectPairWithUSDC(token)) {
-        revert NoDirectPairExists();
-    }
+// Immutable for security (cannot be changed after deployment)
+address public immutable USDC_TOKEN;
+
+constructor(
+    address _usdcToken,  // Set once during deployment
+    // ... other parameters
+) {
+    USDC_TOKEN = _usdcToken;  // Cannot be changed later
 }
 ```
 
-**Supported:**
-- ✅ **ETH**: Router automatically converts ETH → WETH → USDC
-- ✅ **WETH**: Direct swap WETH → USDC  
-- ✅ **USDC**: No conversion needed
-- ✅ **Major tokens**: DAI, USDT, WBTC, etc. (with direct USDC pairs)
+**Benefits:**
+- ✅ **Security**: Prevents malicious USDC address changes
+- ✅ **User Protection**: Users know exactly which USDC they'll receive
+- ✅ **Immutable Storage**: All balances permanently tied to specific USDC
+- ✅ **Audit Simplicity**: No need to verify ongoing USDC address updates
 
-**Not Supported:**
-- ❌ **Tokens without direct USDC pairs**: Would require multi-hop routing
-- ❌ **Multi-hop routes**: Token → WETH → USDC (rejected for simplicity)
+**Risks & Limitations:**
+- ❌ **No Migration**: Cannot switch to USDC v2 or alternative stablecoins
+- ❌ **USDC Risks**: Exposed to Circle's centralization and potential freezing
+- ❌ **Redeployment Required**: Contract must be redeployed for USDC changes
+- ❌ **Regulatory Risk**: USDC blacklisting affects user funds permanently
 
-#### **Gas Optimization Analysis**
+### �🔀 Token Routing Strategy
 
-#### **Factory Caching Strategy**
-- **Deployment cost**: +22,000 gas (one-time)
-- **Per-transaction savings**: 2,100 gas (avoids `router.factory()` call)
-- **Break-even point**: 18 failed transactions
-- **Annual savings**: Significant for high-volume usage
-- **Flexibility**: Operator can update factory for future changes
-
-#### **Validation Gas Costs**
+#### **Supported Tokens**
+```solidity
+✅ ETH → Router handles ETH → WETH → USDC automatically (via deposit())
+❌ WETH → REJECTED via depositTokenAsUSD() (use deposit() for ETH instead)
+✅ USDC → No conversion needed
+✅ Major tokens → DAI, USDT, WBTC (with direct USDC pairs)
+❌ Tokens without direct pairs → Would require multi-hop routing
 ```
-Failed Transaction Costs:
-- Without validation: 30,000-50,000 gas (full swap attempt)
-- With getPair(): 23,600 gas (quick validation + revert)
-- With getAmountsOut(): 31,000 gas (complex path finding)
-
-Savings per failed transaction: 6,400-26,400 gas (21-53% reduction)
-```
-
-## ⚖️ Design Trade-offs
-
-### **ETH vs ERC20 Token Handling**
-
-#### **ETH (Native Ether)**
-- **Nature**: Native blockchain currency, NOT an ERC20 token
-- **Function**: `deposit()` - marked as `payable`
-- **How it works**: 
-  - Receives ETH via `msg.value`
-  - Internally treats as WETH for Uniswap swap
-  - Uses `swapExactETHForTokens()` method
-- ✅ **Benefits**: Direct ETH handling, no token approvals needed
-- ⚠️ **Trade-offs**: Requires special handling, different swap mechanism
-
-#### **ERC20 Tokens (Including WETH)**
-- **Nature**: Smart contracts implementing ERC20 standard
-- **Function**: `depositTokenAsUSD(amount, tokenAddress)` - NOT payable
-- **How it works**:
-  - Requires prior `approve()` transaction
-  - Uses `safeTransferFrom()` to move tokens
-  - Uses `swapExactTokensForTokens()` method
-- ✅ **Benefits**: Standardized interface, wide token support
-- ⚠️ **Trade-offs**: Requires two transactions (approve + deposit)
 
 #### **WETH Special Case**
-- **Protection**: `depositTokenAsUSD()` rejects WETH addresses
-- **Reason**: Prevents user confusion between ETH and WETH deposits
-- **Error**: `UseDepositForETH()` when WETH is attempted via wrong function
-- ✅ **Benefits**: Clear separation of concerns, prevents mistakes
-- ⚠️ **Trade-offs**: Users must understand ETH vs WETH distinction
+```solidity
+// WETH deposits explicitly rejected to avoid confusion
+if (tokenIn == uniswapRouter.WETH()) {
+    revert UseDepositForETH(); // Users must use deposit() for ETH
+}
+```
 
-### **Unified USDC Storage**
-- ✅ **Benefit**: Simplified accounting, single withdrawal method
-- ✅ **Benefit**: No price oracle dependency, market-rate conversions
-- ⚠️ **Trade-off**: Users always receive USDC, not original token
-- ⚠️ **Trade-off**: Depends on Uniswap liquidity and slippage
+**Design Decision**: Force clear separation between ETH and ERC20 flows
+- ✅ **Clear UX**: Users know exactly which function to use
+- ✅ **No confusion**: ETH vs WETH distinction enforced at contract level
+- ❌ **Limitation**: Users holding WETH must unwrap to ETH first
 
-### **Uniswap Integration**
-- ✅ **Benefit**: Real-time market prices, no oracle manipulation risk
-- ✅ **Benefit**: Automatic liquidity discovery
-- ⚠️ **Trade-off**: Requires direct USDC pairs (no multi-hop routing)
-- ⚠️ **Trade-off**: Subject to DEX fees and slippage
-- ⚠️ **Trade-off**: Failed swaps cause entire transaction to revert
+#### **Why NO Multi-hop?**
+**Decision:** Only direct Token → USDC routes
 
-### **Security & Flexibility Balance**
-- ✅ **Immutable Config**: USDC token and limits set permanently for security
-- ✅ **Updateable Components**: Factory and router updateable by operator role
-- ✅ **Access Control**: Only operators can make infrastructure updates
-- ✅ **Automatic Sync**: Router updates automatically sync factory address
-- ⚠️ **Trade-off**: Requires contract redeployment to change any immutable values
+**Reasons:**
+- ✅ **Simplicity**: Predictable routes, fewer failure points
+- ✅ **Gas efficiency**: Fewer calls, less accumulated slippage
+- ✅ **Security**: Fewer contracts in execution chain
+- ❌ **Limitation**: Excludes tokens that only have WETH pairs
 
-### **Role-Based Access**
-- ✅ **Benefit**: Granular permissions, operational flexibility
-- ⚠️ **Trade-off**: Additional complexity vs single-admin model
+**Trade-off Example:**
+```solidity
+// NOT supported: TOKEN → WETH → USDC (multi-hop)
+// YES supported: TOKEN → USDC (direct)
+```
 
-### **No ETH Send Protection**
-- ✅ **Current State**: No `receive()` or `fallback()` functions
-- ✅ **Benefit**: Accidental ETH sends to contract will fail and revert
-- ⚠️ **Trade-off**: Users must use correct `deposit()` function
+### 📊 Gas Optimization Analysis
 
-## 🔄 ETH vs ERC20 Token Guide
+#### **Cost Comparison (Foundry gas-report)**
+| Scenario | v3.1.0 | v3.3.0 | Savings |
+|-----------|--------|--------|---------|
+| **Deployment** | 3,382,089 | 3,174,200 | **207K (-6.1%)** |
+| **Token without pair** | 55,000 | 32,000 | **23K (-43%)** |
+| **Bank cap exceeded** | 66,000 | 35,000 | **31K (-53%)** |
+| **Successful deposit** | 85K | 85K | No change |
 
-### **When to use `deposit()` (for ETH)**
-- ✅ You want to deposit native ETH (Ether)
-- ✅ You're sending ETH directly from your wallet
-- ✅ You want one-step deposit (no approval needed)
-- ❌ **DO NOT** use for WETH or any other token
+**Break-even Analysis:**
+- **Optimization cost**: -207K gas on deployment
+- **Savings per error**: +23K-31K gas 
+- **Break-even**: ~7-9 failed transactions
 
-### **When to use `depositTokenAsUSD()` (for ERC20s)**
-- ✅ You want to deposit any ERC20 token (USDT, DAI, WBTC, etc.)
-- ✅ You already have USDC and want to deposit it directly
-- ✅ You have other tokens with direct USDC pairs on Uniswap
-- ❌ **DO NOT** use for native ETH
-- ❌ **DO NOT** use for WETH (contract will reject with `UseDepositForETH` error)
+## 🔧 Foundry Debugging & Development
 
-### **Key Differences**
-| Aspect | `deposit()` | `depositTokenAsUSD()` |
-|--------|-------------|----------------------|
-| **Function type** | `payable` | NOT `payable` |
-| **Accepts** | Native ETH only | Any ERC20 (except WETH) |
-| **Approval needed** | No | Yes (call `approve()` first) |
-| **Transactions** | 1 transaction | 2 transactions |
-| **Swap method** | `swapExactETHForTokens` | `swapExactTokensForTokens` |
-| **Gas cost** | Lower (1 tx) | Higher (2 tx) |
+### Specific Tests
+```bash
+# Test gas optimization
+forge test --match-test testBankCapEnforcement --gas-report
 
-### **Common Mistakes to Avoid**
-- ❌ Sending ETH to `depositTokenAsUSD()` (will fail - not payable)
-- ❌ Using WETH address in `depositTokenAsUSD()` (will revert)
-- ❌ Forgetting to approve ERC20 tokens before deposit
-- ❌ Expecting to withdraw original token (always get USDC back)
+# Test operator functions
+forge test --match-test testUpdateWithdrawalLimit -vvv
 
-## 📊 Balance Reconciliation
+# Test token validation
+forge test --match-test testNoDirectPairRejection -vvv
+```
 
-The contract provides two similar but distinct balance query functions:
+### Tracing & Debugging
+```bash
+# Complete transaction trace
+forge test --match-test testETHDepositSuccess --trace
 
-### **`getBankValueUSD()` vs `getBankUSDCBalance()`**
+# Debug with breakpoints
+forge test --match-test testDepositToken --debug
 
-| Function | Source | Purpose |
-|----------|--------|---------|
-| `getBankValueUSD()` | Internal accounting (`totalTokenDeposits`) | Tracks sum of all user deposits |
-| `getBankUSDCBalance()` | USDC token contract | Actual USDC tokens held |
+# Verify storage slots
+forge inspect KipuBank storage-layout
+```
 
-**Normal Conditions**: Both functions should return the same value.
+### Fork Testing
+```bash
+# Test against mainnet fork (requires ETH_RPC_URL)
+forge test --fork-url $ETH_RPC_URL
 
-**Potential Differences**:
-- ✅ **Direct USDC transfers**: Someone sent USDC directly to contract
-- ✅ **Swap residue**: Small amounts left from Uniswap slippage
-- ✅ **Debugging tool**: Helps identify accounting discrepancies
-- ✅ **Future extensibility**: Useful for fees, yield, or multi-token features
+# Test with specific block
+forge test --fork-url $ETH_RPC_URL --fork-block-number 18500000
+```
 
-Use both functions to verify contract health and detect unusual conditions.
+## 🎯 Future Plausible Optimizations
+
+1. **Batch Operations**: Multiple deposits in one transaction
+2. **Multi-hop Support**: TOKEN → WETH → USDC routes for broader coverage
+3. **Yield Integration**: Deposit USDC into yield farming protocols
+4. **On-chain Analytics**: Usage metrics tracking in contract
+5. **Gas Price Oracle**: Dynamic limit adjustment based on gas costs
 
 ## ⚠️ Important Notes
 
@@ -335,19 +300,6 @@ Use both functions to verify contract health and detect unusual conditions.
 - **Security**: Perform complete audit before production deployment
 - **Testing**: Test with small amounts first to understand swap behavior
 
-## 📦 Code Quality & Best Practices
-
-### **Development Standards**
-- **Solidity Version**: ^0.8.22 (latest stable features)
-- **OpenZeppelin**: Latest security-audited contracts
-- **Foundry**: Modern development and testing framework
-- **Code Coverage**: Comprehensive test suite covering all functions
-- **Documentation**: Complete NatSpec documentation for all functions
-
-## �📄 License
-
-MIT License - See `LICENSE` for complete details.
-
 ---
 
-**⚠️ Important**: This contract is for educational purposes. Stub contracts (Circle, Oracle) are designed only for testing. Perform complete security audit before production use.
+**⚠️ Important**: Educational contract. Perform complete security audit before production use.

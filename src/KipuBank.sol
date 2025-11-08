@@ -32,7 +32,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * =========================================== */
 
     /// @notice Version of the KipuBank contract
-    string public constant VERSION = "3.2.0";
+    string public constant VERSION = "3.3.0";
 
     /// @notice Role for administrators who can manage the bank
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -60,10 +60,10 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     uint256 private withdrawalsCount;
 
     /// @notice Maximum amount that can be withdrawn in a single transaction (in USD with 6 decimals)
-    uint256 private immutable WITHDRAWAL_LIMIT_USD;
+    uint256 private withdrawalLimitUsd;
 
     /// @notice Total limit of value that can be deposited in the bank (in USD with 6 decimals)
-    uint256 private immutable BANK_CAP_USD;
+    uint256 private bankCapUsd;
 
     /// @notice Mapping of user addresses to token addresses to their balances (in USD with 6 decimals)
     /// @dev All balances are stored as USDC amounts after conversion. The mapping is kept bidimensional
@@ -100,6 +100,12 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Emitted when the Uniswap V2 Router address is updated by operator
     event UniswapRouterUpdated(address indexed operator, address oldRouter, address newRouter);
+
+    /// @notice Emitted when the withdrawal limit is updated by operator
+    event WithdrawalLimitUpdated(address indexed operator, uint256 oldLimit, uint256 newLimit);
+
+    /// @notice Emitted when the bank capacity is updated by operator
+    event BankCapUpdated(address indexed operator, uint256 oldCap, uint256 newCap);
 
     /// @notice Emitted when a role is granted to a user
     event RoleGrantedByAdmin(address indexed admin, address indexed account, bytes32 indexed role);
@@ -164,8 +170,8 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             revert InvalidContract();
         }
 
-        WITHDRAWAL_LIMIT_USD = _withdrawalLimitUsd;
-        BANK_CAP_USD = _bankCapUsd;
+        withdrawalLimitUsd = _withdrawalLimitUsd;
+        bankCapUsd = _bankCapUsd;
         USDC_TOKEN = IERC20(_usdcToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
 
@@ -237,16 +243,16 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             usdcAmount = amount;
             // Check bank capacity for USDC deposits
             uint256 currentTotalUsd = _getTotalBankValueUsd();
-            if (currentTotalUsd + usdcAmount > BANK_CAP_USD) {
-                revert ExceedsBankCapUSD(usdcAmount, BANK_CAP_USD - currentTotalUsd);
+            if (currentTotalUsd + usdcAmount > bankCapUsd) {
+                revert ExceedsBankCapUSD(usdcAmount, bankCapUsd - currentTotalUsd);
             }
         } else {
             // Get estimated USDC amount and validate pair existence in one call
             uint256 estimatedUsdcAmount = _getExpectedUsdcAmount(amount, tokenAddress);
             // Check bank capacity BEFORE performing the actual swap (fail-fast)
             uint256 currentTotalUsd = _getTotalBankValueUsd();
-            if (currentTotalUsd + estimatedUsdcAmount > BANK_CAP_USD) {
-                revert ExceedsBankCapUSD(estimatedUsdcAmount, BANK_CAP_USD - currentTotalUsd);
+            if (currentTotalUsd + estimatedUsdcAmount > bankCapUsd) {
+                revert ExceedsBankCapUSD(estimatedUsdcAmount, bankCapUsd - currentTotalUsd);
             }
             // Perform actual swap
             usdcAmount = _swapTokenForUsdc(amount, tokenAddress);
@@ -271,9 +277,9 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             revert ZeroAmount();
         }
 
-        // Checks - use immutable limit
-        if (amount > WITHDRAWAL_LIMIT_USD) {
-            revert ExceedsWithdrawLimitUSD(amount, WITHDRAWAL_LIMIT_USD);
+        // Checks - use limit
+        if (amount > withdrawalLimitUsd) {
+            revert ExceedsWithdrawLimitUSD(amount, withdrawalLimitUsd);
         }
 
         uint256 userBalanceUsd = balances[msg.sender][address(USDC_TOKEN)];
@@ -397,7 +403,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * @notice This function can be called by any user without gas cost.
      */
     function getBankCapUSD() external view returns (uint256) {
-        return BANK_CAP_USD;
+        return bankCapUsd;
     }
 
     /**
@@ -406,7 +412,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * @notice This function can be called by any user without gas cost.
      */
     function getWithdrawalLimitUSD() external view returns (uint256) {
-        return WITHDRAWAL_LIMIT_USD;
+        return withdrawalLimitUsd;
     }
 
     /**
@@ -502,5 +508,37 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         uniswapRouter = IUniswapV2Router02(newRouter);
 
         emit UniswapRouterUpdated(msg.sender, oldRouter, newRouter);
+    }
+
+    /**
+     * @dev Update the withdrawal limit in USD.
+     * @notice Only operators can call this function.
+     * @param newLimit New withdrawal limit in USD (with 6 decimals).
+     */
+    function updateWithdrawalLimit(uint256 newLimit) external onlyRole(OPERATOR_ROLE) {
+        if (newLimit == 0) {
+            revert InvalidWithdrawLimit();
+        }
+
+        uint256 oldLimit = withdrawalLimitUsd;
+        withdrawalLimitUsd = newLimit;
+
+        emit WithdrawalLimitUpdated(msg.sender, oldLimit, newLimit);
+    }
+
+    /**
+     * @dev Update the bank capacity in USD.
+     * @notice Only operators can call this function.
+     * @param newCap New bank capacity in USD (with 6 decimals).
+     */
+    function updateBankCap(uint256 newCap) external onlyRole(OPERATOR_ROLE) {
+        if (newCap == 0) {
+            revert InvalidBankCap();
+        }
+
+        uint256 oldCap = bankCapUsd;
+        bankCapUsd = newCap;
+
+        emit BankCapUpdated(msg.sender, oldCap, newCap);
     }
 }
