@@ -58,6 +58,16 @@ forge test --gas-report
 
 **Note**: Tests use Ethereum mainnet fork to interact with real Uniswap contracts. Make sure your `ETH_RPC_URL` is configured in `.env`.
 
+## Starting Anvil with Sepolia Fork
+```shell
+anvil --fork-url $ETH_RPC_URL
+```
+
+## Deploy KipuBank Contract
+```shell
+forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $WALLET_ADDRESS
+```
+
 
 # KipuBank - Smart Contract
 

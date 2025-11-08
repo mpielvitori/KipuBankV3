@@ -16,7 +16,7 @@ jobs:
     name: Foundry project
     runs-on: ubuntu-latest
     env:
-      FOUNDRY_ETH_RPC_URL: ${{ secrets.FOUNDRY_ETH_RPC_URL }}
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
     steps:
       - uses: actions/checkout@v5
         with:
