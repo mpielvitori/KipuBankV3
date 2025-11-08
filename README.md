@@ -54,6 +54,55 @@ forge test --match-test testETHDepositSuccess -vvv
 forge coverage
 ```
 
+### Coverage Report
+
+```bash
+# Generate coverage report
+forge coverage --report lcov -r coverage/lcov.info
+
+# Generate HTML report
+genhtml coverage/lcov.info -o coverage
+
+# Open coverage/index.html in browser to view detailed coverage report
+open coverage/index.html
+```
+
+##### install LCOV on MacOS
+```bash
+brew install lcov
+```
+
+#### 📊 Test Results
+
+#### Gas Report
+![Gas Report](docs/images/gas-report.png)
+
+#### Coverage Report  
+![Coverage Report](docs/images/coverage.png)
+
+## 🔧 Foundry Debugging & Development
+
+### Specific Tests
+```bash
+# Test gas optimization
+forge test --match-test testBankCapEnforcement --gas-report
+
+# Test operator functions
+forge test --match-test testUpdateWithdrawalLimit -vvv
+
+# Test token validation
+forge test --match-test testNoDirectPairRejection -vvv
+```
+
+### Tracing & Debugging
+```bash
+# Debug with breakpoints
+forge test --match-test testDepositToken --debug
+
+# Verify storage slots
+forge inspect KipuBank storage-layout
+```
+
 ### Local Deploy
 
 ```bash
@@ -237,47 +286,6 @@ if (tokenIn == uniswapRouter.WETH()) {
 - **Optimization cost**: -207K gas on deployment
 - **Savings per error**: +23K-31K gas 
 - **Break-even**: ~7-9 failed transactions
-
-## 🔧 Foundry Debugging & Development
-
-### Specific Tests
-```bash
-# Test gas optimization
-forge test --match-test testBankCapEnforcement --gas-report
-
-# Test operator functions
-forge test --match-test testUpdateWithdrawalLimit -vvv
-
-# Test token validation
-forge test --match-test testNoDirectPairRejection -vvv
-```
-
-### Tracing & Debugging
-```bash
-# Debug with breakpoints
-forge test --match-test testDepositToken --debug
-
-# Verify storage slots
-forge inspect KipuBank storage-layout
-```
-
-### Coverage Report
-
-```bash
-# Generate coverage report
-forge coverage --report lcov -r coverage/lcov.info
-
-# Generate HTML report
-genhtml coverage/lcov.info -o coverage
-
-# Open coverage/index.html in browser to view detailed coverage report
-open coverage/index.html
-```
-
-##### install LCOV on MacOS
-```bash
-brew install lcov
-```
 
 ## 🎯 Future Plausible Optimizations
 
