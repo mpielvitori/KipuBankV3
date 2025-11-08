@@ -5,7 +5,6 @@ import {Script, console2} from "forge-std/Script.sol";
 import {KipuBank} from "../src/KipuBank.sol";
 
 interface IRouter {
-    function factory() external view returns (address);
     function WETH() external view returns (address);
 }
 
@@ -26,10 +25,8 @@ contract KipuBankScript is Script {
         require(usdcAddress.code.length > 0, "USDC: no code at addr");
 
         // Display configuration
-        address factory = IRouter(uniswapV2Router).factory();
         address weth = IRouter(uniswapV2Router).WETH();
         console2.log("Router:", uniswapV2Router);
-        console2.log("Factory:", factory);
         console2.log("WETH:", weth);
         console2.log("USDC:", usdcAddress);
         console2.log("BANK_CAP_USD:", bankCapUsd);

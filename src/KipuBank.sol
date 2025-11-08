@@ -15,8 +15,6 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import {IUniswapV2Router02} from "v2-periphery/interfaces/IUniswapV2Router02.sol";
 
-import {IUniswapV2Factory} from "v2-core/interfaces/IUniswapV2Factory.sol";
-
 /**
  * @author Martín Pielvitori
  * @title KipuBank
@@ -34,7 +32,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * =========================================== */
 
     /// @notice Version of the KipuBank contract
-    string public constant VERSION = "3.1.0";
+    string public constant VERSION = "3.2.0";
 
     /// @notice Role for administrators who can manage the bank
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -54,9 +52,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Uniswap V2 Router for token swaps
     IUniswapV2Router02 private uniswapRouter;
-
-    /// @notice Uniswap V2 Factory for direct pair validation (cached and updateable by operator)
-    IUniswapV2Factory private uniswapFactory;
 
     /// @notice Total number of deposit operations performed
     uint256 private depositsCount;
@@ -105,9 +100,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
 
     /// @notice Emitted when the Uniswap V2 Router address is updated by operator
     event UniswapRouterUpdated(address indexed operator, address oldRouter, address newRouter);
-
-    /// @notice Emitted when the Uniswap V2 Factory address is updated by operator
-    event UniswapFactoryUpdated(address indexed operator, address oldFactory, address newFactory);
 
     /// @notice Emitted when a role is granted to a user
     event RoleGrantedByAdmin(address indexed admin, address indexed account, bytes32 indexed role);
@@ -176,7 +168,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         BANK_CAP_USD = _bankCapUsd;
         USDC_TOKEN = IERC20(_usdcToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
-        uniswapFactory = IUniswapV2Factory(uniswapRouter.factory());
 
         _grantRole(ADMIN_ROLE, msg.sender);
         _grantRole(OPERATOR_ROLE, msg.sender);
@@ -234,7 +225,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * @notice Converts any token to USDC via Uniswap V2 swap (except USDC which is stored directly).
      *         For ETH deposits, the amount is treated as wei and swapped via swapExactETHForTokens.
      *         For ERC20 deposits, tokens are swapped via swapExactTokensForTokens.
-     *         Verifies direct pair existence before attempting swap to prevent gas waste.
+     *         Uses getAmountsOut for pre-validation to check pair existence and bank cap before swap.
      * @param account Address of the account making the deposit
      * @param amount Amount of token to deposit (wei for ETH, token decimals for ERC20)
      * @param tokenAddress Address of the token to deposit (WETH address for ETH deposits)
@@ -244,18 +235,21 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         uint256 usdcAmount;
         if (tokenAddress == address(USDC_TOKEN)) {
             usdcAmount = amount;
-        } else {
-            // Only allow tokens with direct USDC pairs (ETH/WETH handled separately by router)
-            if (tokenAddress != uniswapRouter.WETH() && !_hasDirectPairWithUSDC(tokenAddress)) {
-                revert NoDirectPairExists();
+            // Check bank capacity for USDC deposits
+            uint256 currentTotalUsd = _getTotalBankValueUsd();
+            if (currentTotalUsd + usdcAmount > BANK_CAP_USD) {
+                revert ExceedsBankCapUSD(usdcAmount, BANK_CAP_USD - currentTotalUsd);
             }
+        } else {
+            // Get estimated USDC amount and validate pair existence in one call
+            uint256 estimatedUsdcAmount = _getExpectedUsdcAmount(amount, tokenAddress);
+            // Check bank capacity BEFORE performing the actual swap (fail-fast)
+            uint256 currentTotalUsd = _getTotalBankValueUsd();
+            if (currentTotalUsd + estimatedUsdcAmount > BANK_CAP_USD) {
+                revert ExceedsBankCapUSD(estimatedUsdcAmount, BANK_CAP_USD - currentTotalUsd);
+            }
+            // Perform actual swap
             usdcAmount = _swapTokenForUsdc(amount, tokenAddress);
-        }
-
-        // Check bank capacity in USD
-        uint256 currentTotalUsd = _getTotalBankValueUsd();
-        if (currentTotalUsd + usdcAmount > BANK_CAP_USD) {
-            revert ExceedsBankCapUSD(usdcAmount, BANK_CAP_USD - currentTotalUsd);
         }
 
         // Effects - USDC already has 6 decimals, store directly
@@ -330,7 +324,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
             path[0] = tokenIn;
             path[1] = address(USDC_TOKEN);
 
-            // Swap directo tokenIn -> USDC
+            // Direct swap tokenIn -> USDC
             uint256[] memory amounts =
                 uniswapRouter.swapExactTokensForTokens(amountIn, 0, path, address(this), block.timestamp);
 
@@ -339,13 +333,25 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
     }
 
     /**
-     * @dev Verifies that a direct Uniswap V2 pair exists between tokenIn and USDC.
-     * @param tokenIn Address of the input token to check
-     * @return bool True if direct pair exists, false otherwise
-     * @notice Uses cached factory for gas optimization. Only direct pairs supported.
+     * @dev Gets estimated USDC amount for a given token amount using getAmountsOut.
+     * @notice This function serves dual purpose: validates pair existence AND estimates output.
+     *         If no direct pair exists, getAmountsOut will revert with "UniswapV2Library: INSUFFICIENT_LIQUIDITY".
+     *         Replaces separate _hasDirectPairWithUSDC() call for gas efficiency.
+     * @param amountIn Amount of input token
+     * @param tokenIn Address of input token (WETH for ETH deposits, ERC20 address for tokens)
+     * @return estimatedUsdcAmount Estimated USDC amount that would be received
      */
-    function _hasDirectPairWithUSDC(address tokenIn) private view returns (bool) {
-        return uniswapFactory.getPair(tokenIn, address(USDC_TOKEN)) != address(0);
+    function _getExpectedUsdcAmount(uint256 amountIn, address tokenIn) private view returns (uint256) {
+        address[] memory path = new address[](2);
+        path[0] = tokenIn;
+        path[1] = address(USDC_TOKEN);
+
+        try uniswapRouter.getAmountsOut(amountIn, path) returns (uint256[] memory amounts) {
+            return amounts[amounts.length - 1];
+        } catch {
+            // getAmountsOut reverts if no pair exists or insufficient liquidity
+            revert NoDirectPairExists();
+        }
     }
 
     /**
@@ -363,15 +369,6 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      */
     function getUniswapRouter() external view returns (address) {
         return address(uniswapRouter);
-    }
-
-    /**
-     * @dev Public view function to get the current Uniswap V2 Factory address.
-     * @return The address of the current Uniswap V2 Factory contract.
-     * @notice This function can be called by any user without gas cost.
-     */
-    function getUniswapFactory() external view returns (address) {
-        return address(uniswapFactory);
     }
 
     /**
@@ -492,8 +489,8 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      * =========================================== */
 
     /**
-     * @dev Update the Uniswap V2 Router address and sync factory automatically.
-     * @notice Only operators can call this function. Factory is automatically updated to match router.
+     * @dev Update the Uniswap V2 Router address.
+     * @notice Only operators can call this function.
      * @param newRouter New Uniswap V2 Router address.
      */
     function updateUniswapRouter(address newRouter) external onlyRole(OPERATOR_ROLE) {
@@ -502,29 +499,8 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
         }
 
         address oldRouter = address(uniswapRouter);
-        address oldFactory = address(uniswapFactory);
-
         uniswapRouter = IUniswapV2Router02(newRouter);
-        // Automatically sync factory with new router
-        uniswapFactory = IUniswapV2Factory(IUniswapV2Router02(newRouter).factory());
 
         emit UniswapRouterUpdated(msg.sender, oldRouter, newRouter);
-        emit UniswapFactoryUpdated(msg.sender, oldFactory, address(uniswapFactory));
-    }
-
-    /**
-     * @dev Update the Uniswap V2 Factory address manually (for custom factory scenarios).
-     * @notice Only operators can call this function. Use this only if factory needs to be different from router.factory().
-     * @param newFactory New Uniswap V2 Factory address.
-     */
-    function updateUniswapFactory(address newFactory) external onlyRole(OPERATOR_ROLE) {
-        if (newFactory == address(0)) {
-            revert InvalidContract();
-        }
-
-        address oldFactory = address(uniswapFactory);
-        uniswapFactory = IUniswapV2Factory(newFactory);
-
-        emit UniswapFactoryUpdated(msg.sender, oldFactory, newFactory);
     }
 }

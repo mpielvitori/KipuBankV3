@@ -6,7 +6,6 @@ import {KipuBank} from "../src/KipuBank.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {IUniswapV2Factory} from "lib/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 
 contract KipuBankTest is Test {
     KipuBank public kipuBank;
@@ -97,7 +96,7 @@ contract KipuBankTest is Test {
         assertEq(kipuBank.getUniswapRouter(), uniswapRouter);
 
         // Verify initial state
-        assertEq(kipuBank.VERSION(), "3.1.0");
+        assertEq(kipuBank.VERSION(), "3.2.0");
         assertFalse(kipuBank.paused(), "Should start unpaused");
         assertTrue(kipuBank.hasRole(kipuBank.ADMIN_ROLE(), admin));
         assertTrue(kipuBank.hasRole(kipuBank.OPERATOR_ROLE(), admin));
@@ -332,21 +331,12 @@ contract KipuBankTest is Test {
 
     function testUpdateUniswapRouter() public {
         address newRouter = makeAddr("newRouter");
-        address expectedFactory = makeAddr("expectedFactory");
-
-        // Make the addresses persistent for fork testing
-        vm.makePersistent(newRouter);
-        vm.makePersistent(expectedFactory);
-
-        // Mock the new router to return our expected factory
-        vm.mockCall(newRouter, abi.encodeWithSignature("factory()"), abi.encode(expectedFactory));
 
         vm.startPrank(operator);
         kipuBank.updateUniswapRouter(newRouter);
         vm.stopPrank();
 
         assertEq(kipuBank.getUniswapRouter(), newRouter);
-        assertEq(kipuBank.getUniswapFactory(), expectedFactory);
     }
 
     function testUpdateUniswapRouterOnlyOperator() public {
@@ -367,51 +357,6 @@ contract KipuBankTest is Test {
         vm.expectRevert(KipuBank.InvalidContract.selector);
         kipuBank.updateUniswapRouter(address(0));
         vm.stopPrank();
-    }
-
-    function testUpdateUniswapFactory() public {
-        address newFactory = makeAddr("newFactory");
-
-        vm.startPrank(operator);
-        kipuBank.updateUniswapFactory(newFactory);
-        vm.stopPrank();
-
-        assertEq(kipuBank.getUniswapFactory(), newFactory);
-    }
-
-    function testUpdateUniswapFactoryOnlyOperator() public {
-        address newFactory = makeAddr("newFactory");
-
-        vm.startPrank(user1);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, user1, kipuBank.OPERATOR_ROLE()
-            )
-        );
-        kipuBank.updateUniswapFactory(newFactory);
-        vm.stopPrank();
-    }
-
-    function testUpdateUniswapFactoryZeroAddress() public {
-        vm.startPrank(operator);
-        vm.expectRevert(KipuBank.InvalidContract.selector);
-        kipuBank.updateUniswapFactory(address(0));
-        vm.stopPrank();
-    }
-
-    function testUpdateUniswapRouterSyncsFactory() public {
-        address newRouter = makeAddr("newRouter");
-        address expectedFactory = makeAddr("expectedFactory");
-
-        // Mock the new router to return our expected factory
-        vm.mockCall(newRouter, abi.encodeWithSignature("factory()"), abi.encode(expectedFactory));
-
-        vm.startPrank(operator);
-        kipuBank.updateUniswapRouter(newRouter);
-        vm.stopPrank();
-
-        assertEq(kipuBank.getUniswapRouter(), newRouter);
-        assertEq(kipuBank.getUniswapFactory(), expectedFactory);
     }
 
     // ===== VIEW FUNCTIONS TESTS =====

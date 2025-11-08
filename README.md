@@ -5,7 +5,6 @@
 ```shell
 forge install OpenZeppelin/openzeppelin-contracts
 forge install Uniswap/v2-periphery
-forge install Uniswap/v2-core
 forge install foundry-rs/forge-std
 ```
 
@@ -107,9 +106,7 @@ KipuBank is a smart contract developed in Solidity that simulates a multi-token 
 | `getUserBalance(user)` | external view | View user balance in USDC |
 | `getBankValueUSD()` | external view | View total USD value per internal accounting |
 | `getUniswapRouter()` | external view | View current Uniswap Router address |
-| `getUniswapFactory()` | external view | View current Uniswap Factory address |
-| `updateUniswapRouter(router)` | external (operator) | Update router and sync factory |
-| `updateUniswapFactory(factory)` | external (operator) | Update factory manually |
+| `updateUniswapRouter(router)` | external (operator) | Update router address |
 
 ### Implemented Security
 - ✅ **Reentrancy Protection**: OpenZeppelin ReentrancyGuard
@@ -134,19 +131,24 @@ KipuBank is a smart contract developed in Solidity that simulates a multi-token 
 ## Ejemplo de validación
 
 ```solidity
-function _hasDirectPairWithUSDC(address tokenIn) private view returns (bool) {
-    return uniswapFactory.getPair(tokenIn, address(USDC_TOKEN)) != address(0);
+function _getExpectedUsdcAmount(uint256 amountIn, address tokenIn) private view returns (uint256) {
+    address[] memory path = new address[](2);
+    path[0] = tokenIn;
+    path[1] = address(USDC_TOKEN);
+    
+    try uniswapRouter.getAmountsOut(amountIn, path) returns (uint256[] memory amounts) {
+        return amounts[amounts.length - 1];
+    } catch {
+        revert NoDirectPairExists(); // No pair exists or insufficient liquidity
+    }
 }
 ```
 
 ## Funciones de Operator
 
 ```solidity
-// Actualizar router y sincronizar factory automáticamente
+// Actualizar router solamente
 function updateUniswapRouter(address newRouter) external onlyRole(OPERATOR_ROLE);
-
-// Actualizar factory manualmente (para casos especiales)
-function updateUniswapFactory(address newFactory) external onlyRole(OPERATOR_ROLE);
 ```## Tokens soportados
 - ETH (el router maneja el wrap a WETH)
 - WETH
@@ -155,9 +157,9 @@ function updateUniswapFactory(address newFactory) external onlyRole(OPERATOR_ROL
 
 ## Trade-offs
 - ✅ Simplicidad y predictibilidad
-- ✅ Gas eficiente en fallos (23,600 vs 30-50K sin validación)
-- ✅ Flexibilidad: Factory y router actualizables por operator
-- ✅ Sync automático: Router updates sincronizan factory automáticamente
+- ✅ Gas eficiente con getAmountsOut (43% menos en errores)
+- ✅ Flexibilidad: Router actualizable por operator
+- ✅ Fail-fast validation: Bank cap check antes del swap
 - ❌ No soporta tokens que solo tengan par con WETH
 - ❌ Requiere rol operator para actualizaciones (seguridad vs flexibilidad)
 
