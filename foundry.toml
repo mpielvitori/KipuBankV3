@@ -5,7 +5,8 @@ libs = ["lib"]
 test = "test"
 script = "script"
 
-# Skip script folder from tests and coverage
-skip = ["script/**"]
+# Exclude script folder from test and coverage discovery
+no_match_test = "script/**"
+no_match_coverage = "script/**"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

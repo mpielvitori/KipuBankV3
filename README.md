@@ -41,7 +41,7 @@ cp .env.example .env
 # Compile contracts
 forge build
 
-# Run all tests
+# Run all tests (script/ automatically excluded)
 forge test
 
 # Tests with gas report
@@ -50,7 +50,7 @@ forge test --gas-report
 # Specific test with detailed logs
 forge test --match-test testETHDepositSuccess -vvv
 
-# Test coverage
+# Test coverage (script/ automatically excluded)
 forge coverage
 ```
 
@@ -119,7 +119,7 @@ On another terminal:
 cast wallet import wallet0 --interactive
 
 # Deploy to local network
-forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
+forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
 ```
 
 ### Main Functions by Role
