@@ -37,3 +37,25 @@ jobs:
 
       - name: Run Forge tests
         run: forge test -vvv
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install lcov (genhtml)
+        run: sudo apt-get update && sudo apt-get install -y lcov
+
+      - name: Run coverage (LCOV)
+        run: forge coverage --report lcov -r coverage/lcov.info
+
+      - name: Generate HTML
+        run: genhtml coverage/lcov.info --branch-coverage -o coverage-html
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage-html

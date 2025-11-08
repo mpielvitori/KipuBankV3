@@ -6,13 +6,29 @@ This document provides practical examples for testing KipuBank V3.3.0 using cast
 
 Configure your environment variables in `.env` file and load them:
 
+### Local Deploy - Forked Network
 ```bash
-# Load environment variables
+# Exports .env variables
 source .env
+
+# Start local network with mainnet fork
+anvil --fork-url $ETH_RPC_URL
 ```
 
-### Verify Contract Deployment
-Before testing, ensure KipuBank is properly deployed:
+On another terminal:
+```bash
+# Using the data from anvil, import your wallet using its private key
+cast wallet import wallet0 --interactive
+
+# Exports .env variables
+source .env
+
+# Deploy to local network
+forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
+```
+
+### Verify Contract Deployment (on another terminal)
+Ensure KipuBank is properly deployed:
 
 ```bash
 # Check if contract has code (should return bytecode, not empty)
@@ -23,22 +39,22 @@ cast call $KIPUBANK_ADDRESS "VERSION()(string)" --rpc-url $RPC_URL
 ```
 
 **Required Environment Variables:**
-- `KIPUBANK_ADDRESS` - Your deployed KipuBank contract address
 - `RPC_URL` - Your Ethereum RPC URL
-- `USER_WALLET_ADDRESS` - User wallet address for testing
-- `OPERATOR_WALLET_ADDRESS` - Operator wallet address for role testing
-- `USDC_MAINNET` - USDC token address (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48)
-- `LINK_MAINNET` - LINK token address (0x3E64Cd889482443324F91bFA9c84fE72A511f48A) 
-- `WETH_MAINNET` - WETH token address (0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)
+- `ETH_RPC_URL` - Your Ethereum RPC URL for mainnet fork
 - `UNISWAP_V2_ROUTER_MAINNET` - Uniswap V2 Router address (0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D)
+- `USDC_MAINNET` - USDC token address (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48)
+- `BANK_CAP_USD` - Initial bank capacity in USD (e.g., 500000000 for $5,000)
+- `WITHDRAWAL_LIMIT_USD` - Initial withdrawal limit in USD (e.g., 1000000000 for $1,000)
+- `KIPUBANK_ADDRESS` - Your deployed KipuBank contract address
+- `WETH_MAINNET` - WETH token address (0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2)
+- `LINK_MAINNET` - LINK token address (0x3E64Cd889482443324F91bFA9c84fE72A511f48A) 
+- `ADMIN_WALLET_ADDRESS` - Contract deployer wallet address for testing
+- `ADMIN_PRIVATE_KEY` - Private key for admin wallet
+- `OPERATOR_WALLET_ADDRESS` - Operator wallet address for role testing
+- `OPERATOR_PRIVATE_KEY` - Private key for operator wallet
+- `USER_WALLET_ADDRESS` - User wallet address for testing
+- `USER_PRIVATE_KEY` - Private key for user wallet
 - Private keys for testing accounts
-
-<!-- Generate new test private keys if needed:
-```bash
-# Generate new test accounts
-cast wallet new # Creates new random wallet with private key
-cast wallet new-mnemonic # Creates mnemonic and derived accounts
-``` -->
 
 ## Basic Balance Checking
 
@@ -130,33 +146,6 @@ cast send $KIPUBANK_ADDRESS "updateBankCap(uint256)" 2000000000 --private-key $O
 
 # Update withdrawal limit (100 USD = 100000000 wei)
 cast send $KIPUBANK_ADDRESS "updateWithdrawalLimit(uint256)" 100000000 --private-key $OPERATOR_PRIVATE_KEY --rpc-url $RPC_URL
-```
-
-## Simple Testing Workflow
-
-```bash
-# 1. Get tokens first
-source .env
-
-DEADLINE=$(($(date +%s) + 1800))  # 30 minutes from now
-
-# Swap 1 ETH for USDC
-cast send $UNISWAP_V2_ROUTER_MAINNET "swapExactETHForTokens(uint256,address[],address,uint256)" 0 "[$WETH_MAINNET,$USDC_MAINNET]" $USER_WALLET_ADDRESS $DEADLINE --value 1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
-
-# 2. Deposit ETH directly
-cast send $KIPUBANK_ADDRESS "deposit()" --value 0.1ether --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
-
-# 3. Deposit some USDC
-USDC_BALANCE=$(cast call $USDC_MAINNET "balanceOf(address)" $USER_WALLET_ADDRESS --rpc-url $RPC_URL)
-DEPOSIT_AMOUNT=$((USDC_BALANCE / 2))
-cast send $USDC_MAINNET "approve(address,uint256)" $KIPUBANK_ADDRESS $DEPOSIT_AMOUNT --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
-cast send $KIPUBANK_ADDRESS "depositTokenAsUSD(uint256,address)" $DEPOSIT_AMOUNT $USDC_MAINNET --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
-
-# 4. Check your total balance
-forge script script/UserHelper.s.sol --rpc-url $RPC_URL -s "checkUser(address)" $USER_WALLET_ADDRESS -vvv
-
-# 5. Test withdrawal
-cast send $KIPUBANK_ADDRESS "withdrawUSD(uint256)" 25000000 --private-key $USER_PRIVATE_KEY --rpc-url $RPC_URL
 ```
 
 ## Error Testing Scenarios

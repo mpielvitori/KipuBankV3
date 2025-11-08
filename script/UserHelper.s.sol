@@ -69,6 +69,8 @@ contract UserHelper is Script {
         console2.log("USDC Balance:", kipuBank.getBankUSDCBalance() / 1e6);
         console2.log("Bank Cap USD:", kipuBank.getBankCapUSD() / 1e6);
         console2.log("Withdrawal Limit USD:", kipuBank.getWithdrawalLimitUSD() / 1e6);
+        console2.log("Withdrawal Count:", kipuBank.getWithdrawalsCount());
+        console2.log("Deposit Count:", kipuBank.getDepositsCount());
 
         // Capacity analysis
         uint256 bankValue = kipuBank.getBankValueUSD();

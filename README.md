@@ -26,11 +26,13 @@ git clone https://github.com/mpielvitori/KipuBankV3.git
 cd KipuBankV3
 
 # Install dependencies
-forge install
+forge install OpenZeppelin/openzeppelin-contracts
+forge install Uniswap/v2-periphery
+forge install foundry-rs/forge-std
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your ETH_RPC_URL (Alchemy/Infura)
+# Edit .env with your ETH_RPC_URL Keys (Alchemy/Infura)
 ```
 
 ### Build & Testing
@@ -60,28 +62,15 @@ source .env
 
 # Start local network with mainnet fork
 anvil --fork-url $ETH_RPC_URL
+```
 
-# Using the data from anvil, import any wallet using its private key
+On another terminal:
+```bash
+# Using the data from anvil, import your wallet using its private key
 cast wallet import wallet0 --interactive
 
 # Deploy to local network
 forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wallet0 --sender $ADMIN_WALLET_ADDRESS
-```
-
-## 🏗️ Architecture
-
-### Key Variables (V3.3.0)
-```solidity
-// Updateable limits by OPERATOR_ROLE
-uint256 public withdrawalLimitUsd;
-uint256 public bankCapUsd;
-
-// Immutable configuration (security)
-address public immutable USDC_TOKEN;
-string public constant VERSION = "3.3.0";
-
-// Unified balance mapping
-mapping(address => uint256) public balances;  // Everything in USDC
 ```
 
 ### Main Functions by Role
@@ -265,23 +254,11 @@ forge test --match-test testNoDirectPairRejection -vvv
 
 ### Tracing & Debugging
 ```bash
-# Complete transaction trace
-forge test --match-test testETHDepositSuccess --trace
-
 # Debug with breakpoints
 forge test --match-test testDepositToken --debug
 
 # Verify storage slots
 forge inspect KipuBank storage-layout
-```
-
-### Fork Testing
-```bash
-# Test against mainnet fork (requires ETH_RPC_URL)
-forge test --fork-url $ETH_RPC_URL
-
-# Test with specific block
-forge test --fork-url $ETH_RPC_URL --fork-block-number 18500000
 ```
 
 ## 🎯 Future Plausible Optimizations
