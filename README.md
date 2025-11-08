@@ -96,7 +96,7 @@ forge script script/KipuBank.s.sol  --rpc-url $RPC_URL --broadcast --account wal
 | `unpauseBank()` | ~24K | Resume bank operations |
 | `grantOperatorRole()` | ~50K | Grant operator role to address |
 
-> **📋 For detailed examples and testing**: See [`USE_CASES.md`](USE_CASES.md) for complete Foundry testing workflows, `cast` command examples, and practical use cases for each function.
+> **📋 For detailed examples and testing**: See [`USE_CASES.md`](USE_CASES.md) for complete `cast` command examples, and practical use cases for each function.
 
 ## ⚖️ Design Trade-offs and Architecture Evolution
 
@@ -259,6 +259,24 @@ forge test --match-test testDepositToken --debug
 
 # Verify storage slots
 forge inspect KipuBank storage-layout
+```
+
+### Coverage Report
+
+```bash
+# Generate coverage report
+forge coverage --report lcov -r coverage/lcov.info
+
+# Generate HTML report
+genhtml coverage/lcov.info -o coverage
+
+# Open coverage/index.html in browser to view detailed coverage report
+open coverage/index.html
+```
+
+##### install LCOV on MacOS
+```bash
+brew install lcov
 ```
 
 ## 🎯 Future Plausible Optimizations

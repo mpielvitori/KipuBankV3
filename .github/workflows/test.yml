@@ -50,14 +50,33 @@ jobs:
       - name: Install lcov (genhtml)
         run: sudo apt-get update && sudo apt-get install -y lcov
 
+      - name: Prepare coverage dir
+        run: |
+          rm -rf coverage
+          mkdir -p coverage
+
       - name: Run coverage (LCOV)
         run: forge coverage --report lcov -r coverage/lcov.info
 
-      - name: Generate HTML
-        run: genhtml coverage/lcov.info --branch-coverage -o coverage-html
+      - name: Generate HTML report
+        run: genhtml coverage/lcov.info -o coverage
 
-      - name: Upload artifact
+      - name: Upload HTML artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
-          path: coverage-html
+          path: coverage
+
+      - name: Upload raw LCOV
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-info
+          path: coverage/lcov.info
+
+      - name: Post job summary
+        if: always()
+        run: |
+          echo "**Cobertura generada correctamente**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Descarga el artefacto **coverage-html** desde la pestaña 'Artifacts' y abre \`index.html\` para ver el reporte visual." >> $GITHUB_STEP_SUMMARY
+
