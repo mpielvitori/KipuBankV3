@@ -76,7 +76,7 @@ jobs:
       - name: Post job summary
         if: always()
         run: |
-          echo "**Cobertura generada correctamente**" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage generated successfully**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Descarga el artefacto **coverage-html** desde la pestaña 'Artifacts' y abre \`index.html\` para ver el reporte visual." >> $GITHUB_STEP_SUMMARY
+          echo "Download the **coverage-html** artifact from the 'Artifacts' section and open \`index.html\` to view the visual report." >> $GITHUB_STEP_SUMMARY
 
