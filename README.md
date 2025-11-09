@@ -327,3 +327,17 @@ if (tokenIn == uniswapRouter.WETH()) {
 ---
 
 **⚠️ Important**: Educational contract. Perform complete security audit before production use.
+
+## 📚 Additional Resources
+
+### Circle USDC
+- [USDC contract addresses](https://developers.circle.com/stablecoins/usdc-contract-addresses)
+- [USDC faucet](https://faucet.circle.com/)
+
+### Uniswap
+- [Router](https://docs.uniswap.org/contracts/v2/reference/smart-contracts/router-02)
+- [Uniswap contract addresses](https://docs.uniswap.org/contracts/v2/reference/smart-contracts/v2-deployments)
+
+### Chainlink
+- [Chainlink contract addresses](https://docs.chain.link/resources/link-token-contracts)
+- [Chainlink Faucet](https://faucets.chain.link/sepolia)

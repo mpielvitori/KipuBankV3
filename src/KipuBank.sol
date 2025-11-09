@@ -272,7 +272,7 @@ contract KipuBank is ReentrancyGuard, AccessControl, Pausable {
      *         Users receive actual USDC tokens transferred to their address.
      * @param amount Amount of USDC to withdraw (with 6 decimals)
      */
-    function withdrawUSD(uint256 amount) external nonReentrant {
+    function withdrawUSD(uint256 amount) external nonReentrant whenNotPaused {
         if (amount == 0) {
             revert ZeroAmount();
         }
