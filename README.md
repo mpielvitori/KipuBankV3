@@ -111,6 +111,14 @@ forge test --match-test testDepositToken --debug
 forge inspect KipuBank storage-layout
 ```
 
+### Deployment
+
+📝 **Environment Configuration**: Set the `ENVIRONMENT` variable in your `.env` file to target the desired network:
+- **For Mainnet/Mainnet fork**: Set `ENVIRONMENT=MAINNET`
+- **For Sepolia**: Set `ENVIRONMENT=SEPOLIA`
+
+The script will automatically use the correct `UNISWAP_V2_ROUTER_*` and `USDC_*` variables based on your environment setting.
+
 ### Local Deploy
 
 ```bash
@@ -132,15 +140,12 @@ forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $RPC_URL --broadcas
 
 ### Deploy and verify on Sepolia
 
-⚠️ **Important**: Before running the deployment script, update the environment variables in `script/KipuBank.s.sol` based on your target network:
-- **For Mainnet/Mainnet fork**: Use `UNISWAP_V2_ROUTER_MAINNET` and `USDC_MAINNET`
-- **For Sepolia**: Change to `UNISWAP_V2_ROUTER_SEPOLIA` and `USDC_SEPOLIA`
-- *This will be improved with automatic network detection in future versions*
-
 ```bash
 # Exports .env variables
 source .env
-forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $SEPOLIA_ETH_RPC_URL --broadcast --account walletSepolia --sender $SEPOLIA_WALLET_ADDRESS --verify --etherscan-api-key $ETHERSCAN_PRIVATE_KEY
+
+# Deploy to Sepolia network
+forge script script/KipuBank.s.sol:KipuBankScript  --rpc-url $SEPOLIA_RPC_URL --broadcast --account walletSepolia --sender $SEPOLIA_WALLET_ADDRESS --verify --etherscan-api-key $ETHERSCAN_PRIVATE_KEY
 ```
 
 ### Main Functions by Role

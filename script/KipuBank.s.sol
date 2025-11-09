@@ -14,14 +14,20 @@ contract KipuBankScript is Script {
     function setUp() public {}
 
     function run() public {
-        // IMPORTANT: Update environment variables based on target network
-        // For Mainnet: Use UNISWAP_V2_ROUTER_MAINNET and USDC_MAINNET
-        // For Sepolia: Use UNISWAP_V2_ROUTER_SEPOLIA and USDC_SEPOLIA
-        // TODO: Improve this in future versions with network detection
+        // Get target environment from ENVIRONMENT variable (e.g., "MAINNET", "SEPOLIA")
+        string memory environment = vm.envString("ENVIRONMENT");
+        console2.log("Target Environment:", environment);
 
-        // Read environment variables
-        address uniswapV2Router = vm.parseAddress(vm.envString("UNISWAP_V2_ROUTER_MAINNET"));
-        address usdcAddress = vm.parseAddress(vm.envString("USDC_MAINNET"));
+        // Dynamically construct environment variable names
+        string memory routerVar = string.concat("UNISWAP_V2_ROUTER_", environment);
+        string memory usdcVar = string.concat("USDC_", environment);
+
+        console2.log("Using Router Variable:", routerVar);
+        console2.log("Using USDC Variable:", usdcVar);
+
+        // Read environment variables dynamically
+        address uniswapV2Router = vm.parseAddress(vm.envString(routerVar));
+        address usdcAddress = vm.parseAddress(vm.envString(usdcVar));
         uint256 bankCapUsd = vm.envUint("BANK_CAP_USD");
         uint256 withdrawalUsd = vm.envUint("WITHDRAWAL_LIMIT_USD");
 
