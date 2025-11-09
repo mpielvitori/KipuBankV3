@@ -20,7 +20,7 @@ KipuBank is a smart decentralized bank that accepts deposits in ETH and multiple
 ## 🌐 Live Deployments
 
 ### Sepolia Testnet
-- **Contract Address**: [`0xf2e71cFFB88F31b92A13B245528D350A54F15feB`](https://sepolia.etherscan.io/address/0xf2e71cffb88f31b92a13b245528d350a54f15feb)
+- **Contract Address**: [`0xa4F1A735Cf70Dcea205178AC7b3548C85e9F655E`](https://sepolia.etherscan.io/address/0xa4f1a735cf70dcea205178ac7b3548c85e9f655e)
 - **Network**: Ethereum Sepolia Testnet
 - **Version**: KipuBank V3.3.0
 
